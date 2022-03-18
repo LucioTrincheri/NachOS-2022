@@ -1,0 +1,243 @@
+Plancha 1.
+
+Ignacio Petruskevicius
+
+
+1-
+
+    Al estar emulado, se permiten cambiar parametros fisicos del cpu con simples cambios de codigo, sin tocar el
+    hardware. Ademas, emular MIPS permite que cualquier computadora, ya sea ARM o x86 o lo que sea pueda correr el
+    mismo software. Notesé que el hardware del MIPS es bastante mas simple que otras arquitecturas. Por lo tanto
+    resulta mas simple de entender para el estudiante.
+
+2-
+
+    NUM_PHYS_PAGES = 32;
+    MEMORY_SIZE = NUM_PHYS_PAGES * PAGE_SIZE;
+    PAGE_SIZE = SECTOR_SIZE;
+    SECTOR_SIZE = 128;
+
+    Por lo tanto se tiene que la memoria de NachOS es de 128 * 23 = 4096 bytes
+
+
+3-
+
+    Se podria aumentar la cantidad de páginas.
+
+4-
+
+    DISK_SIZE = MAGIC_SIZE + NUM_SECTORS * SECTOR_SIZE;
+    MAGIC_SIZE = sizeof(int)
+    NUM_SECTORS = 32 * 32 = 1024
+    SECTOR_SIZE = 128
+
+    Suponiendo un sizeof(int) = 8
+
+    Se obtiene 13180 bytes
+
+5-
+
+    En el archivo encoding.hh se puede observar el emun de instrucciones, y viendo ademas mips_sim.cc podemos
+    contar 59 instrucciones.
+
+6-
+
+    bin/coff2flat.c:main(int argc, char *argv[])
+    bin/coff2noff.c:main(int argc, char *argv[])
+    bin/disasm.c:main(int argc, char *argv[])
+    bin/fuse/nachosfuse.c:main(int argc, char *argv[])
+    bin/main.c:main(int argc, char *argv[])
+    bin/out.c:main(int argc, char *argv[])
+    bin/readnoff.c:main(int argc, char *argv[])
+    threads/main.cc:main(int argc, char **argv)
+    userland/echo.c:main(int argc, char *argv[])
+    userland/filetest.c:main(void)
+    userland/halt.c:main(void)
+    userland/matmult.c:main(void)
+    userland/shell.c:main(void)
+    userland/sort.c:main(void)
+    userland/tiny_shell.c:main(void)
+    userland/touch.c:main(int argc, char *argv[])
+
+
+    Se encuentra en el archivo:   ../threads/main.cc
+
+7-
+
+    - ASSERT que está en lib/assert.hh
+    - ParseDebugOpts que está en threads/system.hh
+    - strcmp que está en string.h
+    - RandomInit que está en machine/system_dep.hh
+    - atoi que está en stdlib.h
+    - SetFlags que está en lib/debug.hh
+    - SetOpts que está en lib/debug.hh
+    - Timer que está en machine/timer.hh
+    - Thread que está en threads/thread.hh
+    - SetStatus que está en threads/thread.hh
+    - Enable que está en machine/interrupt.hh
+    - CallOnUserAbort que está en machine/system_dep.hh
+    - PreemptiveScheduler que está en threads/preemptive.hh
+    - SetUp que está en threads/preemptive.hh
+    - SetExceptionHandlers que está en userprog/exception.hh
+
+
+    Main llama a DEBUG que está en lib/utility.hh
+    DEBUG llama a Print que se encuentra en lib/debug.hh
+
+    Main llama a strcmp que está en string.h
+
+    Main llama a SysInfo que está en threads/sys_info.hh
+    SysInfo llama a printf que está en stdio.h
+
+    Main llama a PrintVersion que está en threads/main.cc
+    PrintVersion llama a printf que esta en stdio.h
+
+    Main llama a ThreadTest que está definida en threads/thread_test.cc
+    ThreadTest llama a:
+    - DEBUG que está en lib/utility.hh
+    - Choose que está en threads/thread_test.cc
+    - Run que está en threads/thread_test.cc
+
+    Main llama a Halt que está en machione/interrupt.hh
+    Halt llama a:
+    - printf que está en stdio.h
+    - Print que está machine/statistics.hh
+    - Cleanup que está en threads/system.hh
+
+    Main llama a Finish que está definido en threads/thread.cc
+    Finish llama a:
+    - SetLevel que está en machine/interrupt.hh
+    - ASSERT que está en lib/assert.hh
+    - DEBUG que está en lib/utility.hh
+    - Sleep que está en threads/thread.cc
+
+
+8-
+
+    DEBUG revisa banderas e imprime un mensaje pasado como argumento.
+    ASSERT termina el programa si no se cumple la condición y muestra donde se rompió.
+
+9-
+
+    /// * `+` -- turn on all debug messages.
+    /// * `t` -- thread system.
+    /// * `s` -- semaphores, locks, and conditions.
+    /// * `i` -- interrupt emulation.
+    /// * `m` -- machine emulation (requires *USER_PROGRAM*).
+    /// * `d` -- disk emulation (requires *FILESYS*).
+    /// * `f` -- file system (requires *FILESYS*).
+    /// * `a` -- address spaces (requires *USER_PROGRAM*).
+    /// * `e` -- exception handling (requires *USER_PROGRAM*).
+    /// * `n` -- network emulation (requires *NETWORK*).
+
+
+10-
+
+
+    USER_PROGRAM está definida en:
+    filesys/Makefile
+    network/Makefile
+    userprog/Makefile
+    vmem/Makefile
+
+    FILESYS_NEEDED está definida en:
+    filesys/Makefile
+    network/Makefile
+    userprog/Makefile
+    vmem/Makefile
+
+    FILESYS_STUB está definida en:
+    userprog/Makefile
+    vmem/Makefile
+
+    NETWORK está definida en:
+    network/Makefile
+
+
+11-
+
+    /// Usage
+    /// =====
+    ///
+    ///     nachos [-d <debugflags>] [-p] [-rs <random seed #>] [-z]
+    ///            [-s] [-x <nachos file>] [-tc <consoleIn> <consoleOut>]
+    ///            [-f] [-cp <unix file> <nachos file>] [-pr <nachos file>]
+    ///            [-rm <nachos file>] [-ls] [-D] [-tf]
+    ///            [-n <network reliability>] [-id <machine id>]
+    ///            [-tn <other machine id>]
+    ///
+    /// General options
+    /// ---------------
+    ///
+    /// * `-d`  -- causes certain debugging messages to be printed (cf.
+    ///   `utility.hh`).
+    /// * `-p`  -- enables preemptive multitasking for kernel threads.
+    /// * `-rs` -- causes `Yield` to occur at random (but repeatable) spots.
+    /// * `-z`  -- prints version and copyright information, and exits.
+    ///
+    /// *USER_PROGRAM* options
+    /// ----------------------
+    ///
+    /// * `-s`  -- causes user programs to be executed in single-step mode.
+    /// * `-x`  -- runs a user program.
+    /// * `-tc` -- tests the console.
+    ///
+    /// *FILESYS* options
+    /// -----------------
+    ///
+    /// * `-f`  -- causes the physical disk to be formatted.
+    /// * `-cp` -- copies a file from UNIX to Nachos.
+    /// * `-pr` -- prints a Nachos file to standard output.
+    /// * `-rm` -- removes a Nachos file from the file system.
+    /// * `-ls` -- lists the contents of the Nachos directory.
+    /// * `-D`  -- prints the contents of the entire file system.
+    /// * `-tf` -- tests the performance of the Nachos file system.
+    ///
+    /// *NETWORK* options
+    /// -----------------
+    ///
+    /// * `-n`  -- sets the network reliability.
+    /// * `-id` -- sets this machine's host id (needed for the network).
+    /// * `-tn` -- runs a simple test of the Nachos network software.
+
+
+12-
+
+    En el codigo
+
+
+13-
+
+synchList
+
+    /// The following class defines a "synchronized list" -- a list for which
+    /// these constraints hold:
+    ///
+    /// 1. Threads trying to remove an item from a list will wait until the list
+    ///    has an element on it.
+    /// 2. One thread at a time can access list data structures.
+
+    List no cumple esas condiciones, es solo una lista simplemente enlazada. Esta se utiliza en synchList
+
+
+14-
+
+    En el codigo
+
+15-
+
+    En el codigo
+
+16-
+
+    En el codigo
+
+17-
+
+    En el codigo
+
+18-
+
+    En el codigo
+
+

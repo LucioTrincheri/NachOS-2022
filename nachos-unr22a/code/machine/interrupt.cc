@@ -389,7 +389,8 @@ void
 Interrupt::DumpState()
 {
     printf("Time: %lu, interrupts %s\n",
-           stats->totalTicks, INT_LEVEL_NAMES[level]);
+            stats->totalTicks, INT_LEVEL_NAMES[level]);
+            stats->Print();
     if (pending->IsEmpty()) {
         printf("No pending interrupts\n");
     } else {
