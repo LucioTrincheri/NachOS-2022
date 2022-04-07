@@ -16,15 +16,25 @@
 
 
 #include "lock.hh"
+#include "system.hh"
+#include <stdlib.h>
+#include <stdio.h>
 
 
 /// Dummy functions -- so we can compile our later assignments.
 
 Lock::Lock(const char *debugName)
-{}
+{
+    // tal vez strcpy
+    name = debugName;
+    semaphore = new Semaphore("Semaforo", 1);
+    lockOwner = nullptr;
+}
 
 Lock::~Lock()
-{}
+{
+    semaphore->~Semaphore();
+}
 
 const char *
 Lock::GetName() const
@@ -35,18 +45,27 @@ Lock::GetName() const
 void
 Lock::Acquire()
 {
-    // TODO
+    ASSERT(!IsHeldByCurrentThread());
+    //* Herencia de prioridad. Utilizada para solucionar el problema de inversion de prioridades en locks. 
+    if (lockOwner && lockOwner->GetPriority() > currentThread->GetPriority()) {
+        lockOwner->SetPriorityHerencia(currentThread->GetPriority());
+    }
+    semaphore->P();
+    lockOwner = currentThread;
 }
 
 void
 Lock::Release()
 {
-    // TODO
+    ASSERT(IsHeldByCurrentThread());
+    //* Si fue actualizada su prioridad.
+    lockOwner->SetPriorityHerencia(lockOwner->GetOriginalPriority());
+    semaphore->V();
+    lockOwner = nullptr;
 }
 
 bool
 Lock::IsHeldByCurrentThread() const
 {
-    // TODO
-    return false;
+    return lockOwner == currentThread;
 }

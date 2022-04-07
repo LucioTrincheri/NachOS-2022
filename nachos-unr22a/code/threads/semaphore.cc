@@ -64,7 +64,7 @@ Semaphore::P()
       // Disable interrupts.
 
     while (value == 0) {  // Semaphore not available.
-        queue->Append(currentThread);  // So go to sleep.
+        queue->SortedInsert(currentThread, currentThread->GetPriority());  // So go to sleep.
         currentThread->Sleep();
     }
     value--;  // Semaphore available, consume its value.

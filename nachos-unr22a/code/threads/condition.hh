@@ -76,6 +76,10 @@ private:
 
     const char *name;
 
+    Lock *cond;
+
+    List <Semaphore*> *waiting;
+
     // Other needed fields are to be added here.
 };
 

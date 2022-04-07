@@ -1,8 +1,5 @@
 #include "sys_info.hh"
 #include "copyright.h"
-#include "machine/disk.hh"
-#include "machine/disk.cc"
-#include "machine/mmu.hh"
 #include "filesys/directory_entry.hh"
 #include "filesys/file_system.hh"
 #include "filesys/raw_file_header.hh"
@@ -52,19 +49,17 @@ General:\n\
       PROGRAM, VERSION, OPTIONS);
     printf("\n\
 Memory:\n\
-  Page size: %d bytes.\n\
-  Number of pages: %d.\n\
-  Number of TLB entries: %d.\n\
-  Memory size: %d bytes.\n",
-      PAGE_SIZE, NUM_PHYS_PAGES, TLB_SIZE, MEMORY_SIZE);
+  Page size: UNKNOWN bytes.\n\
+  Number of pages: UNKNOWN.\n\
+  Number of TLB entries: UNKNOWN.\n\
+  Memory size: UNKNOWN bytes.\n");
     printf("\n\
 Disk:\n\
-  Sector size: %d bytes.\n\
-  Sectors per track: %d.\n\
-  Number of tracks: %d.\n\
-  Number of sectors: %d.\n\
-  Disk size: %d bytes.\n",
-  SECTOR_SIZE, SECTORS_PER_TRACK, NUM_TRACKS, NUM_SECTORS, DISK_SIZE);
+  Sector size: UNKNOWN bytes.\n\
+  Sectors per track: UNKNOWN.\n\
+  Number of tracks: UNKNOWN.\n\
+  Number of sectors: UNKNOWN.\n\
+  Disk size: UNKNOWN bytes.\n");
     printf("\n\
 Filesystem:\n\
   Sectors per header: %u.\n\

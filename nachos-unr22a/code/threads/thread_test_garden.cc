@@ -44,7 +44,7 @@ ThreadTestGarden()
         sprintf(name, "Turnstile %u", i);
         unsigned *n = new unsigned;
         *n = i;
-        Thread *t = new Thread(name);
+        Thread *t = new Thread(name, false, 0);
         t->Fork(Turnstile, (void *) n);
     }
 
@@ -94,7 +94,7 @@ ThreadTestGardenSem()
         sprintf(name, "Turnstile %u", i);
         unsigned *n = new unsigned;
         *n = i;
-        Thread *t = new Thread(name);
+        Thread *t = new Thread(name, false, 0);
         t->Fork(TurnstileEj18, (void *) n);
     }
 

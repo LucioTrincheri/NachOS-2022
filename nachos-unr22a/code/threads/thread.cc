@@ -20,6 +20,7 @@
 #include "thread.hh"
 #include "switch.h"
 #include "system.hh"
+#include "channel.hh"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -40,12 +41,27 @@ IsThreadStatus(ThreadStatus s)
 /// `Thread::Fork`.
 ///
 /// * `threadName` is an arbitrary string, useful for debugging.
-Thread::Thread(const char *threadName)
+Thread::Thread(const char *threadName, bool joinable_, unsigned int priority_)
 {
     name     = threadName;
     stackTop = nullptr;
     stack    = nullptr;
     status   = JUST_CREATED;
+    joinable = joinable_;
+
+    if (priority_ > MAX_PRIORITY) {
+        priority = MAX_PRIORITY;
+        originalPriority = MAX_PRIORITY;
+    } else {
+        priority = priority_;
+        originalPriority = priority_;
+    }
+
+    if (joinable)
+    {
+        canal = new Channel(name);
+    }
+
 #ifdef USER_PROGRAM
     space    = nullptr;
 #endif
@@ -67,6 +83,10 @@ Thread::~Thread()
     if (stack != nullptr) {
         SystemDep::DeallocBoundedArray((char *) stack,
                                        STACK_SIZE * sizeof *stack);
+    }
+    if (joinable)
+    {
+       delete canal;
     }
 }
 
@@ -102,6 +122,57 @@ Thread::Fork(VoidFunctionPtr func, void *arg)
     interrupt->SetLevel(oldLevel);
 }
 
+void
+Thread::Join()
+{
+    DEBUG('t', "Waiting joinable thread \"%s\"\n", name);
+    int a;
+    canal->Receive(&a);
+    DEBUG('t', "Receive joinable thread \"%s\"\n", name);
+}
+
+unsigned int
+Thread::GetPriority(){
+    return priority;
+}
+
+unsigned int
+Thread::GetOriginalPriority(){
+    return originalPriority;
+}
+
+//* Esta prioridad tomará efecto en la siguiente ejecucion de Run del scheduler.
+void
+Thread::SetPriority(unsigned int priority_){
+    //* Si la prioridad es menor a cero es invalida.
+    ASSERT(priority_ < 0);
+
+    if (priority_ > MAX_PRIORITY) {
+        priority = MAX_PRIORITY;
+        originalPriority = MAX_PRIORITY;
+        return;
+    }
+
+    if (priority_ )
+    priority = priority_;
+    originalPriority = priority_;
+}
+
+//* No actualiza originalPriority para poder restaurar la prioridad luego de un lock.
+void
+Thread::SetPriorityHerencia(unsigned int priority_){
+    ASSERT(priority_ >= 0);
+
+    if (priority_ > MAX_PRIORITY) {
+        priority = MAX_PRIORITY;
+        return;
+    }
+
+    if (priority_ )
+    priority = priority_;
+}
+
+
 /// Check a thread's stack to see if it has overrun the space that has been
 /// allocated for it.  If we had a smarter compiler, we would not need to
 /// worry about this, but we do not.
@@ -117,7 +188,8 @@ Thread::Fork(VoidFunctionPtr func, void *arg)
 void
 Thread::CheckOverflow() const
 {
-    if (stack != nullptr) {
+    if (stack != nullptr)
+    {
         ASSERT(*stack == STACK_FENCEPOST);
     }
 }
@@ -159,6 +231,11 @@ Thread::Finish()
     ASSERT(this == currentThread);
 
     DEBUG('t', "Finishing thread \"%s\"\n", GetName());
+
+    if (joinable) {
+        DEBUG('t', "Joinable thread \"%s\" finishing\n", GetName());
+        canal->Send(1);
+    }
 
     threadToBeDestroyed = currentThread;
     Sleep();  // Invokes `SWITCH`.

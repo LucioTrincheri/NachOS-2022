@@ -48,6 +48,7 @@
 
 #include <stdint.h>
 
+class Channel;
 
 /// CPU register state to be saved on context switch.
 ///
@@ -97,7 +98,7 @@ private:
 public:
 
     /// Initialize a `Thread`.
-    Thread(const char *debugName);
+    Thread(const char *debugName, bool joinable, unsigned int priority);
 
     /// Deallocate a Thread.
     ///
@@ -109,6 +110,8 @@ public:
 
     /// Make thread run `(*func)(arg)`.
     void Fork(VoidFunctionPtr func, void *arg);
+
+    void Join();
 
     /// Relinquish the CPU if any other thread is runnable.
     void Yield();
@@ -128,6 +131,14 @@ public:
 
     void Print() const;
 
+    unsigned int GetPriority();
+
+    unsigned int GetOriginalPriority();
+
+    void SetPriority(unsigned int priority);
+
+    void SetPriorityHerencia(unsigned int priority);
+
 private:
     // Some of the private data for this class is listed above.
 
@@ -140,6 +151,14 @@ private:
     ThreadStatus status;
 
     const char *name;
+
+    bool joinable;
+
+    Channel *canal;
+
+    unsigned int priority;
+
+    unsigned int originalPriority;
 
     /// Allocate a stack for thread.  Used internally by `Fork`.
     void StackAllocate(VoidFunctionPtr func, void *arg);

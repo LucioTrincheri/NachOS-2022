@@ -61,7 +61,7 @@ void ThreadTestSimple()
         char *name = new char[1];
         // + 50 para pasarlo a ascci y saltar 0 y 1
         name[0] = i + 50;
-        Thread *newThread = new Thread(name);
+        Thread *newThread = new Thread(name, false, 0);
         newThread->Fork(SimpleThread, (void *)name);
     }
     SimpleThread((void *)"1");

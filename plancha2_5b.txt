@@ -1,0 +1,3 @@
+En el caso de semaforos no se tiene nocion de los threads que tomaron el semaforo, por lo tanto no podemos distinguirlos de los otros
+threads que se estan ejecutando en el sistema. Por esto para poder corregir este incomveniente en semaforos nos falta información.
+En los locks tenemos nocion del thread que lo posee y se esta ejecutando, asi mismo en las codiciones.

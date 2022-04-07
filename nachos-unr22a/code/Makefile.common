@@ -47,6 +47,10 @@ THREAD_HDR = threads/condition.hh             \
              threads/thread_test_garden.hh    \
              threads/thread_test_prod_cons.hh \
              threads/thread_test_simple.hh    \
+             threads/thread_test_channel.hh   \
+             threads/thread_test_lock_herencia.hh   \
+             threads/thread_test_lock_orden.hh   \
+             threads/channel.hh               \
              lib/assert.hh                    \
              lib/debug.hh                     \
              lib/debug_opts.hh                \
@@ -70,6 +74,10 @@ THREAD_SRC = threads/main.cc                  \
              threads/thread_test_garden.cc    \
              threads/thread_test_prod_cons.cc \
              threads/thread_test_simple.cc    \
+             threads/thread_test_channel.cc   \
+             threads/thread_test_lock_herencia.cc   \
+             threads/thread_test_lock_orden.cc   \
+             threads/channel.cc               \
              lib/assert.cc                    \
              lib/debug.cc                     \
              lib/utility.cc                   \
