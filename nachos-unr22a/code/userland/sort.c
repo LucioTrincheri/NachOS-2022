@@ -7,6 +7,7 @@
 
 
 #include "syscall.h"
+#include "lib.c"
 
 
 #define DIM  1024
@@ -36,5 +37,6 @@ main(void)
     }
 
     // And then we're done -- should be 0!
+    Nputs("Terminamos el sorteo no ganaste :c\n");
     return A[0];
 }

@@ -126,7 +126,7 @@ Table<T>::Remove(int i)
         current--;
         for (int j = current - 1; j >= 0 && !HasKey(j); j--) {
             ASSERT(freed.Has(j));
-            freed.SortedPop(&j);
+            freed.Remove(j);
             current--;
         }
     } else {

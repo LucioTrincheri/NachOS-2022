@@ -40,6 +40,8 @@
 
 
 #include "lib/utility.hh"
+#include "lib/table.hh"
+#include "filesys/open_file.hh"
 
 #ifdef USER_PROGRAM
 #include "machine/machine.hh"
@@ -111,7 +113,7 @@ public:
     /// Make thread run `(*func)(arg)`.
     void Fork(VoidFunctionPtr func, void *arg);
 
-    void Join();
+    int Join();
 
     /// Relinquish the CPU if any other thread is runnable.
     void Yield();
@@ -120,7 +122,7 @@ public:
     void Sleep();
 
     /// The thread is done executing.
-    void Finish();
+    void Finish(int ret);
 
     /// Check if thread has overflowed its stack.
     void CheckOverflow() const;
@@ -138,6 +140,14 @@ public:
     void SetPriority(unsigned int priority);
 
     void SetPriorityHerencia(unsigned int priority);
+
+    int StoreOpenFile(OpenFile* openFile);
+
+    bool RemoveOpenFile(int openFileId);
+
+    bool HasOpenFileId(int openFileId);
+    
+    OpenFile* GetOpenFile(int openFileId);
 
 private:
     // Some of the private data for this class is listed above.
@@ -159,6 +169,8 @@ private:
     unsigned int priority;
 
     unsigned int originalPriority;
+
+    Table<OpenFile*> *openFiles;
 
     /// Allocate a stack for thread.  Used internally by `Fork`.
     void StackAllocate(VoidFunctionPtr func, void *arg);

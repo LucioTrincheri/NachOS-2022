@@ -33,6 +33,11 @@ extern Interrupt *interrupt;         ///< Interrupt status.
 extern Statistics *stats;            ///< Performance metrics.
 extern Timer *timer;                 ///< The hardware alarm clock.
 
+#include "lib/table.hh"
+#include "threads/lock.hh"
+extern Table<Thread*> *userThreads;
+extern Lock *userThreadsLock;
+
 #ifdef USER_PROGRAM
 #include "machine/machine.hh"
 extern Machine *machine;  // User program memory and registers.

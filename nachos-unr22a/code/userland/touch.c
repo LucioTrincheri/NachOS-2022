@@ -14,7 +14,8 @@ main(int argc, char *argv[])
     }
 
     int success = 1;
-    for (unsigned i = 0; i < argc; i++) {
+    // antes i era 0 y sobreescribia touch
+    for (unsigned i = 1; i < argc; i++) {
         if (Create(argv[i]) < 0) {
             Write(CREATE_ERROR, sizeof(CREATE_ERROR) - 1, CONSOLE_OUTPUT);
             success = 0;

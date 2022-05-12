@@ -16,7 +16,7 @@
 
 #include "filesys/file_system.hh"
 #include "machine/translation_entry.hh"
-
+#include "filesys/directory_entry.hh" //FILENAME_MAX_LEN
 
 const unsigned USER_STACK_SIZE = 1024;  ///< Increase this as necessary!
 

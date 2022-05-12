@@ -8,6 +8,7 @@
 
 #include "system.hh"
 #include "preemptive.hh"
+#include "lock.hh"
 
 #ifdef USER_PROGRAM
 #include "userprog/debugger.hh"
@@ -29,6 +30,9 @@ Interrupt *interrupt;         ///< Interrupt status.
 Statistics *stats;            ///< Performance metrics.
 Timer *timer;                 ///< The hardware timer device, for invoking
                               ///< context switches.
+
+Table<Thread*> *userThreads;
+Lock *userThreadsLock;
 
 // 2007, Jose Miguel Santos Espino
 PreemptiveScheduler *preemptiveScheduler = nullptr;
@@ -204,9 +208,7 @@ Initialize(int argc, char **argv)
     stats = new Statistics;      // Collect statistics.
     interrupt = new Interrupt;   // Start up interrupt handling.
     scheduler = new Scheduler;   // Initialize the ready queue.
-    if (randomYield) {           // Start the timer (if needed).
-        timer = new Timer(TimerInterruptHandler, 0, randomYield);
-    }
+    timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
     threadToBeDestroyed = nullptr;
 
@@ -226,6 +228,8 @@ Initialize(int argc, char **argv)
         preemptiveScheduler->SetUp(timeSlice);
     }
 
+    userThreads = new Table<Thread*>();
+    userThreadsLock = new Lock("userThreadsLock");
 #ifdef USER_PROGRAM
     Debugger *d = debugUserProg ? new Debugger : nullptr;
     machine = new Machine(d);  // This must come first.
@@ -273,6 +277,8 @@ Cleanup()
     delete timer;
     delete scheduler;
     delete interrupt;
+    delete userThreads;
+    delete userThreadsLock;
 
     exit(0);
 }

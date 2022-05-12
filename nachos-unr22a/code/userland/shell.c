@@ -1,4 +1,5 @@
 #include "syscall.h"
+#include <stdbool.h>
 
 
 #define MAX_LINE_SIZE  60
@@ -112,25 +113,35 @@ main(void)
             continue;
         }
 
-        if (PrepareArguments(line, argv, MAX_ARG_COUNT) == 0) {
-            WriteError("too many arguments.", OUTPUT);
+        if (!PrepareArguments(line, argv, MAX_ARG_COUNT)) {
+            WriteError("error parsing arguments.", OUTPUT);
             continue;
+        }
+        char segundoPlano = *argv[0];
+        // Se debe dejar un espacio entre el ampersand y el comando.
+        if (segundoPlano == '&') {
+            argv[0] = argv[0] + 2;
         }
 
         // Comment and uncomment according to whether command line arguments
         // are given in the system call or not.
-        const SpaceId newProc = Exec(line);
-        //const SpaceId newProc = Exec(line, argv);
+
+        // Si es en segundo plano no lo queremos joinear y tampoco queremos que
+        // el thread se quede esperando que alguien reciva su aviso de finish.
+        // Por lo tanto en Exec lo creamos segun corresponda
+        const SpaceId newProc = Exec(argv[0], argv, (segundoPlano != '&'));
 
         // TODO: check for errors when calling `Exec`; this depends on how
         //       errors are reported.
 
-        Join(newProc);
-        // TODO: is it necessary to check for errors after `Join` too, or
-        //       can you be sure that, with the implementation of the system
-        //       call handler you made, it will never give an error?; what
-        //       happens if tomorrow the implementation changes and new
-        //       error conditions appear?
+        if (segundoPlano != '&') {
+            Join(newProc);
+            // TODO: is it necessary to check for errors after `Join` too, or
+            //       can you be sure that, with the implementation of the system
+            //       call handler you made, it will never give an error?; what
+            //       happens if tomorrow the implementation changes and new
+            //       error conditions appear?
+        }
     }
 
     // Never reached.

@@ -21,6 +21,7 @@
 #include "switch.h"
 #include "system.hh"
 #include "channel.hh"
+#include "filesys/open_file.hh"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -48,6 +49,10 @@ Thread::Thread(const char *threadName, bool joinable_, unsigned int priority_)
     stack    = nullptr;
     status   = JUST_CREATED;
     joinable = joinable_;
+    openFiles = new Table<OpenFile*>();
+    // Para que los fid de la consola siempre esten abiertos para todos
+    openFiles->Add(nullptr);
+    openFiles->Add(nullptr);
 
     if (priority_ > MAX_PRIORITY) {
         priority = MAX_PRIORITY;
@@ -122,13 +127,14 @@ Thread::Fork(VoidFunctionPtr func, void *arg)
     interrupt->SetLevel(oldLevel);
 }
 
-void
+int
 Thread::Join()
 {
     DEBUG('t', "Waiting joinable thread \"%s\"\n", name);
     int a;
     canal->Receive(&a);
     DEBUG('t', "Receive joinable thread \"%s\"\n", name);
+    return a;
 }
 
 unsigned int
@@ -172,6 +178,26 @@ Thread::SetPriorityHerencia(unsigned int priority_){
     priority = priority_;
 }
 
+int
+Thread::StoreOpenFile(OpenFile* openFile) {
+    return openFiles->Add(openFile);
+}
+
+bool
+Thread::RemoveOpenFile(int openFileId) {
+    return openFiles->Remove(openFileId) != nullptr;
+}
+
+bool
+Thread::HasOpenFileId(int openFileId) {
+    return openFiles->HasKey(openFileId);
+}
+
+OpenFile*
+Thread::GetOpenFile(int openFileId) {
+    return openFiles->Get(openFileId);
+}
+
 
 /// Check a thread's stack to see if it has overrun the space that has been
 /// allocated for it.  If we had a smarter compiler, we would not need to
@@ -210,9 +236,8 @@ Thread::GetName() const
 void
 Thread::Print() const
 {
-    printf("%s, ", name);
+    printf("Nombre Thread: %s\n", name);
 }
-
 /// Called by `ThreadRoot` when a thread is done executing the forked
 /// procedure.
 ///
@@ -225,7 +250,7 @@ Thread::Print() const
 /// NOTE: we disable interrupts, so that we do not get a time slice between
 /// setting `threadToBeDestroyed`, and going to sleep.
 void
-Thread::Finish()
+Thread::Finish(int ret)
 {
     interrupt->SetLevel(INT_OFF);
     ASSERT(this == currentThread);
@@ -234,7 +259,7 @@ Thread::Finish()
 
     if (joinable) {
         DEBUG('t', "Joinable thread \"%s\" finishing\n", GetName());
-        canal->Send(1);
+        canal->Send(ret);
     }
 
     threadToBeDestroyed = currentThread;
@@ -314,7 +339,7 @@ Thread::Sleep()
 static void
 ThreadFinish()
 {
-    currentThread->Finish();
+    currentThread->Finish(0);
 }
 
 static void

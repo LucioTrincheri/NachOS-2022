@@ -143,7 +143,7 @@ Scheduler::Run(Thread *nextThread)
 static void
 ThreadPrint(Thread *t)
 {
-    ASSERT(t != nullptr);
+    ASSERT(t != nullptr); // Esto puede generar problemas al printear
     t->Print();
 }
 
