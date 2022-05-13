@@ -36,12 +36,16 @@ const uint32_t dataOffset(const uint32_t dataSize, const uint32_t dataAddrStart,
     ASSERT(data_offset < dataSize);
     return data_offset;
 }
-
+//bool
+//AddressSpace::isMemoryFull(){
+//    return fullMemory;
+//}
 /// First, set up the translation from program memory to physical memory.
 /// For now, this is really simple (1:1), since we are only uniprogramming,
 /// and we have a single unsegmented page table.
 AddressSpace::AddressSpace(OpenFile *executable_file)
 {
+    
     ASSERT(executable_file != nullptr);
 
     Executable exe (executable_file);
@@ -54,8 +58,10 @@ AddressSpace::AddressSpace(OpenFile *executable_file)
     size = numPages * PAGE_SIZE;
 
     if (numPages > usedPages->CountClear()) {
-        throw "Not enough physical memory";
+        fullMemory = true;
+        return;
     }
+    fullMemory = false;
 
     DEBUG('p', "Initializing address space, num pages %u, size %u\n",
           numPages, size);
@@ -143,6 +149,11 @@ AddressSpace::~AddressSpace()
         usedPages->Clear(pageTable[p].physicalPage);
     }
     delete [] pageTable;
+    DEBUG('p', "Deleted page table\n");
+    if (debug.IsEnabled('p')) {
+        usedPages->Print();
+    }
+    DEBUG('a', "Deleted user address space\n");
 }
 
 /// Set the initial values for the user-level register set.

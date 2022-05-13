@@ -47,6 +47,9 @@ public:
     void SaveState();
     void RestoreState();
 
+    //bool isMemoryFull();
+
+    bool fullMemory;
 private:
 
     /// Assume linear page table translation for now!
@@ -54,6 +57,7 @@ private:
 
     /// Number of pages in the virtual address space.
     unsigned numPages;
+
 
 };
 

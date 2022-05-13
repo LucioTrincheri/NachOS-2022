@@ -198,8 +198,11 @@ SyscallHandler(ExceptionType _et)
             int status = machine->ReadRegister(4);
             DEBUG('e', "`Exit` requested with code %d.\n", status);
             
+            if (currentThread->space != nullptr) {
+                delete currentThread->space;
+                currentThread->space = nullptr;
+            }
             currentThread->Finish(status); // Esto pone al thread como threadToBeDestroyed, lo cual el scheduler llama a ~Thread, lo cual libera el stack.
-
             ASSERT(false);
         }
 
@@ -438,10 +441,18 @@ SyscallHandler(ExceptionType _et)
                 machine->WriteRegister(2, -1);
                 break;
             }
-            
+
+            // userThreadsLock->Acquire(); // Puede ser necesario para que otro user thread no cambie full memory. Falso
             AddressSpace *addrSpc = new AddressSpace(openFile); //Puede ser que falle si no hay mas memoria fisica.
             delete openFile;
-            
+
+            if (addrSpc->fullMemory) {
+                DEBUG('e', "Error: Insufficient memory size for address space.\n");
+                machine->WriteRegister(2, -1);
+                //delete openFile;
+                // delete addrSpc; // Puede no ser necesario
+                break;
+            }
             // pasamos en exec un argumento mas que es si es joineable o no el thread.
             bool joinable = machine->ReadRegister(6);
             Thread *thread = new Thread(filename, joinable, 0);
