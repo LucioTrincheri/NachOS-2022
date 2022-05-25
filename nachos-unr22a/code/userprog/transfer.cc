@@ -6,6 +6,7 @@
 #include "transfer.hh"
 #include "lib/utility.hh"
 #include "threads/system.hh"
+#include <cstdio>
 
 
 void ReadBufferFromUser(int userAddress, char *outBuffer,
@@ -19,7 +20,8 @@ void ReadBufferFromUser(int userAddress, char *outBuffer,
     do {
         int temp;
         count++;
-        ASSERT(machine->ReadMem(userAddress++, 1, &temp));
+        while(machine->ReadMem(userAddress, 1, &temp) == false);
+        userAddress ++;
         *outBuffer = (unsigned char) temp;
         outBuffer++;
     } while (count < byteCount);
@@ -34,7 +36,8 @@ void WriteBufferToUser(const char *buffer, int userAddress,
 
     unsigned count = 0;
     do {
-        ASSERT(machine->WriteMem(userAddress++, 1, buffer[count++]));
+        while(machine->WriteMem(userAddress, 1, buffer[count++]) == false);
+        userAddress++;
     } while (count < byteCount);
 }
 
@@ -49,7 +52,9 @@ bool ReadStringFromUser(int userAddress, char *outString,
     do {
         int temp;
         count++;
-        ASSERT(machine->ReadMem(userAddress++, 1, &temp));
+        while(machine->ReadMem(userAddress, 1, &temp) == false);
+        userAddress ++;
+
         *outString = (unsigned char) temp;
     } while (*outString++ != '\0' && count < maxByteCount);
 
@@ -63,7 +68,8 @@ void WriteStringToUser(const char *string, int userAddress)
 
     unsigned count = 0;
     do {
-        ASSERT(machine->WriteMem(userAddress++, 1, string[count++]));
+        while(machine->WriteMem(userAddress, 1, string[count++]) == false);
+        userAddress++;
     } while (string[count] != '\0');
-    ASSERT(machine->WriteMem(userAddress, 1, '\0'));
+    while(machine->WriteMem(userAddress, 1, '\0') == false);
 }

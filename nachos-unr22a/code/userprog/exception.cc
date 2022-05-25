@@ -32,6 +32,7 @@
 #include "threads/lock.hh"
 #include "args.hh"
 #include "synch_console.hh"
+#include "machine.hh"
 static SynchConsole *synchConsole = nullptr;
 
 #include <stdio.h>
@@ -497,6 +498,41 @@ SyscallHandler(ExceptionType _et)
     IncrementPC();
 }
 
+unsigned int getVPN (int vaddr)
+{
+    return (unsigned) vaddr / PAGE_SIZE;
+}
+
+// indice para la FIFO de la TLB
+static unsigned int iTLB = 0;
+
+static void
+PageFaultHandler(ExceptionType _et) {
+
+    
+	// rellenar la TLB con una entrada validad para la pagina quefallo
+    DEBUG('e', "%s\n", ExceptionTypeToString(_et));
+    stats->TBLMisses ++;
+
+	// vpn en el registro BadVAddr
+	int vaddr = machine->ReadRegister(BAD_VADDR_REG);
+	unsigned int vpn = getVPN(vaddr); // sacarle el tamaño del desplazamiento.
+
+    DEBUG('e', "VPN: %d\n", vpn);
+
+	// para saber cual i hago FIFO
+	machine->GetMMU()->tlb[iTLB++%TLB_SIZE] = currentThread->space->GetPageTable()[vpn];
+}
+
+// TODO Check this
+static void ReadOnlyHandler(ExceptionType _et)
+{
+    DEBUG('e', "Tried to read from a read only page");
+
+    ASSERT(false);
+    return;
+}
+
 
 /// By default, only system calls have their own handler.  All other
 /// exception types are assigned the default handler.
@@ -505,8 +541,8 @@ SetExceptionHandlers()
 {
     machine->SetHandler(NO_EXCEPTION,            &DefaultHandler);
     machine->SetHandler(SYSCALL_EXCEPTION,       &SyscallHandler);
-    machine->SetHandler(PAGE_FAULT_EXCEPTION,    &DefaultHandler);
-    machine->SetHandler(READ_ONLY_EXCEPTION,     &DefaultHandler);
+    machine->SetHandler(PAGE_FAULT_EXCEPTION,    &PageFaultHandler);
+    machine->SetHandler(READ_ONLY_EXCEPTION,     &ReadOnlyHandler);
     machine->SetHandler(BUS_ERROR_EXCEPTION,     &DefaultHandler);
     machine->SetHandler(ADDRESS_ERROR_EXCEPTION, &DefaultHandler);
     machine->SetHandler(OVERFLOW_EXCEPTION,      &DefaultHandler);

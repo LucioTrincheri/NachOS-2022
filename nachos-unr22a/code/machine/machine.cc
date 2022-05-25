@@ -95,6 +95,7 @@ bool
 Machine::ReadMem(unsigned addr, unsigned size, int *value)
 {
     ExceptionType e = mmu.ReadMem(addr, size, value);
+    stats->TBLTotals ++;
     if (e != NO_EXCEPTION) {
         RaiseException(e, addr);
         return false;
@@ -106,6 +107,7 @@ bool
 Machine::WriteMem(unsigned addr, unsigned size, int value)
 {
     ExceptionType e = mmu.WriteMem(addr, size, value);
+    stats->TBLTotals ++;
     if (e != NO_EXCEPTION) {
         RaiseException(e, addr);
         return false;

@@ -192,6 +192,11 @@ void
 AddressSpace::SaveState()
 {}
 
+TranslationEntry *
+AddressSpace::GetPageTable() {
+    return pageTable;
+}
+
 /// On a context switch, restore the machine state so that this address space
 /// can run.
 ///
@@ -199,6 +204,10 @@ AddressSpace::SaveState()
 void
 AddressSpace::RestoreState()
 {
-    machine->GetMMU()->pageTable     = pageTable;
-    machine->GetMMU()->pageTableSize = numPages;
+    // Comentamos todo lo de la tabla de paginacion para que se pueda usar la TLB
+    // machine->GetMMU()->pageTable     = pageTable;
+    // machine->GetMMU()->pageTableSize = numPages;
+    for(unsigned int i=0; i<TLB_SIZE; i++) {
+        machine->GetMMU()->tlb[i].valid = false;
+    }
 }

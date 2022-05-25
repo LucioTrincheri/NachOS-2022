@@ -53,6 +53,10 @@ public:
     /// Number of packets received over the network.
     unsigned long numPacketsRecvd;
 
+    /// TBL statistics
+    unsigned long TBLTotals;
+    unsigned long TBLMisses;
+
 #ifdef DFS_TICKS_FIX
     /// Number of times the tick count gets reset.
     unsigned long tickResets;

@@ -98,7 +98,7 @@ MMU::ReadMem(unsigned addr, unsigned size, int *value)
     unsigned physicalAddress;
     ExceptionType e = Translate(addr, &physicalAddress, size, false);
     if (e != NO_EXCEPTION) {
-        return e;
+        return e; 
     }
 
     int data;
@@ -244,6 +244,7 @@ MMU::Translate(unsigned virtAddr, unsigned *physAddr,
     // Calculate the virtual page number, and offset within the page,
     // from the virtual address.
     unsigned vpn    = (unsigned) virtAddr / PAGE_SIZE;
+    printf("VPN: %d\n", vpn);
     unsigned offset = (unsigned) virtAddr % PAGE_SIZE;
 
     TranslationEntry *entry;

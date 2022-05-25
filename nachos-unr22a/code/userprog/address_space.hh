@@ -49,6 +49,8 @@ public:
 
     //bool isMemoryFull();
 
+    TranslationEntry * GetPageTable();
+
     bool fullMemory;
 private:
 
