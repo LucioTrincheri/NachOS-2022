@@ -427,7 +427,7 @@ SyscallHandler(ExceptionType _et)
                 machine->WriteRegister(2, -1);
                 break;
             }
-
+            DEBUG('e', "File read: %s\n", filename);
             OpenFile* openFile = fileSystem->Open(filename);
 
             if (!openFile) {
@@ -446,13 +446,13 @@ SyscallHandler(ExceptionType _et)
 
             // userThreadsLock->Acquire(); // Puede ser necesario para que otro user thread no cambie full memory. Falso
             AddressSpace *addrSpc = new AddressSpace(openFile); //Puede ser que falle si no hay mas memoria fisica.
-            delete openFile;
+            // delete openFile;
 
             if (addrSpc->fullMemory) {
                 DEBUG('e', "Error: Insufficient memory size for address space.\n");
                 machine->WriteRegister(2, -1);
                 //delete openFile;
-                // delete addrSpc; // Puede no ser necesario
+                delete addrSpc; // Puede no ser necesario
                 break;
             }
             // pasamos en exec un argumento mas que es si es joineable o no el thread.
@@ -510,7 +510,8 @@ static unsigned int iTLB = 0;
 static void
 PageFaultHandler(ExceptionType _et) {
 
-    
+    stats->TLBMisses ++;
+    DEBUG('p', "TBLMisses plus one in PageHandler\n");
 	// rellenar la TLB con una entrada validad para la pagina quefallo
     DEBUG('p', "%s\n", ExceptionTypeToString(_et));
 
@@ -519,6 +520,11 @@ PageFaultHandler(ExceptionType _et) {
 	unsigned int vpn = getVPN(vaddr); // sacarle el tamaño del desplazamiento.
 
 	// para saber cual i hago FIFO
+    if (currentThread->space->GetPageTable()[vpn].physicalPage == -1) {
+        DEBUG('p', "Must be -1: %d\n", currentThread->space->GetPageTable()[vpn].physicalPage);
+        currentThread->space->LoadPage(vpn);
+    }
+    DEBUG('p', "Physical page addr: %d\n", currentThread->space->GetPageTable()[vpn].physicalPage);
 	machine->GetMMU()->tlb[iTLB++%TLB_SIZE] = currentThread->space->GetPageTable()[vpn];
 }
 

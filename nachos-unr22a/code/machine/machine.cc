@@ -118,7 +118,7 @@ Machine::ReadMemAbs(unsigned addr, unsigned size, int *value)
 
     if (cErr != 0) {
         stats->TLBTotals --;
-        stats->TLBMisses += cErr;
+        //stats->TLBMisses += cErr;
     }
     return true;
 }
@@ -141,15 +141,18 @@ Machine::WriteMemAbs(unsigned addr, unsigned size, int value)
     int cErr = 0;
     while(machine->WriteMem(addr, size, value) == false && cErr < LIM_TLB_RW) {
         cErr ++;
+        DEBUG('p', "sumo 1\n");
+
     };
 
+    DEBUG('p', "TBLMisses this iteration: %d\n", cErr);
     if (cErr == LIM_TLB_RW) {
         return false;
     }
 
     if (cErr != 0) {
         stats->TLBTotals --;
-        stats->TLBMisses += cErr;
+        //stats->TLBMisses += cErr; //Si esto lo descomentamos porque es correcto, tenemos que comentar la suma en PageFaultHandler
     }
     return true;
 }

@@ -14,9 +14,12 @@
 #define NACHOS_USERPROG_ADDRESSSPACE__HH
 
 
+#include <algorithm>
 #include "filesys/file_system.hh"
+#include "executable.hh"
 #include "machine/translation_entry.hh"
 #include "filesys/directory_entry.hh" //FILENAME_MAX_LEN
+#include <stdint.h>
 
 const unsigned USER_STACK_SIZE = 1024;  ///< Increase this as necessary!
 
@@ -51,6 +54,8 @@ public:
 
     TranslationEntry * GetPageTable();
 
+    void LoadPage(int vpn);
+
     bool fullMemory;
 private:
 
@@ -59,7 +64,16 @@ private:
 
     /// Number of pages in the virtual address space.
     unsigned numPages;
+    unsigned loadedPages;
 
+    unsigned size;
+    uint32_t codeSize;
+    uint32_t codeAddrStart;
+    uint32_t codeAddrEnd;
+    uint32_t initDataSize;
+    uint32_t initDataAddrStart;
+    uint32_t initDataAddrEnd;
+    Executable *exe;
 
 };
 

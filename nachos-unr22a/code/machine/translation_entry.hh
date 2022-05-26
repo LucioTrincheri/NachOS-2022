@@ -36,7 +36,7 @@ public:
 
     /// The page number in real memory (relative to the start of
     /// `mainMemory`).
-    unsigned physicalPage;
+    int physicalPage;
 
     /// If this bit is set, the translation is ignored.
     ///

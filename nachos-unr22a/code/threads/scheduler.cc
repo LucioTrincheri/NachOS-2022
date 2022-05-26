@@ -152,7 +152,6 @@ ThreadPrint(Thread *t)
 void
 Scheduler::Print()
 {
-    printf("Ready list contents:\n");
     for (unsigned int i = 0; i <= MAX_PRIORITY; i++)
     {
         readyList[i]->Apply(ThreadPrint);
