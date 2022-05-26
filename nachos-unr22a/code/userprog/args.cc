@@ -27,7 +27,7 @@ bool CountArgsToSave(int address, unsigned *count)
     int val;
     unsigned c = 0;
     do {
-        while(machine->ReadMem(address + 4 * c, 4, &val) == false);
+        machine->ReadMemAbs(address + 4 * c, 4, &val);
         c++;
     } while (c < MAX_ARG_COUNT && val != 0);
     if (c == MAX_ARG_COUNT && val != 0) {
@@ -61,7 +61,7 @@ SaveArgs(int address)
         args[i] = new char [MAX_ARG_LENGTH];
         int strAddr;
         // For each pointer, read the corresponding string.
-        while(machine->ReadMem(address + i * 4, 4, &strAddr) == false);
+        machine->ReadMemAbs(address + i * 4, 4, &strAddr);
         ReadStringFromUser(strAddr, args[i], MAX_ARG_LENGTH);
     }
     args[count] = nullptr;  // Write the trailing null.
@@ -98,9 +98,9 @@ WriteArgs(char **args)
     sp -= c * 4 + 4;  // Make room for `argv`, including the trailing null.
     // Write each argument's address.
     for (unsigned i = 0; i < c; i++) {
-        while(machine->WriteMem(sp + 4 * i, 4, argsAddress[i]) == false);
+        machine->WriteMemAbs(sp + 4 * i, 4, argsAddress[i]);
     }
-     while(machine->WriteMem(sp + 4 * c, 4, 0) == false);  // The last is null.
+    machine->WriteMemAbs(sp + 4 * c, 4, 0);  // The last is null.
 
     machine->WriteRegister(STACK_REG, sp);
     return c;

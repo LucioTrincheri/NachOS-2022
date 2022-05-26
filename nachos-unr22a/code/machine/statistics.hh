@@ -54,8 +54,8 @@ public:
     unsigned long numPacketsRecvd;
 
     /// TBL statistics
-    unsigned long TBLTotals;
-    unsigned long TBLMisses;
+    unsigned long TLBTotals;
+    unsigned long TLBMisses;
 
 #ifdef DFS_TICKS_FIX
     /// Number of times the tick count gets reset.

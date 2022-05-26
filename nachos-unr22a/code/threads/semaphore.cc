@@ -87,6 +87,7 @@ Semaphore::V()
         // Make thread ready, consuming the `V` immediately.
         scheduler->ReadyToRun(thread);
     }
+
     value++;
 
     interrupt->SetLevel(oldLevel);

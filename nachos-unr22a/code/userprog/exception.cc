@@ -203,6 +203,7 @@ SyscallHandler(ExceptionType _et)
                 delete currentThread->space;
                 currentThread->space = nullptr;
             }
+
             currentThread->Finish(status); // Esto pone al thread como threadToBeDestroyed, lo cual el scheduler llama a ~Thread, lo cual libera el stack.
             ASSERT(false);
         }
@@ -456,7 +457,7 @@ SyscallHandler(ExceptionType _et)
             }
             // pasamos en exec un argumento mas que es si es joineable o no el thread.
             bool joinable = machine->ReadRegister(6);
-            Thread *thread = new Thread(filename, joinable, 0);
+            Thread *thread = new Thread("filename", joinable, 0);
 
             userThreadsLock->Acquire();
             int pid = userThreads->Add(thread);
@@ -511,14 +512,11 @@ PageFaultHandler(ExceptionType _et) {
 
     
 	// rellenar la TLB con una entrada validad para la pagina quefallo
-    DEBUG('e', "%s\n", ExceptionTypeToString(_et));
-    stats->TBLMisses ++;
+    DEBUG('p', "%s\n", ExceptionTypeToString(_et));
 
 	// vpn en el registro BadVAddr
 	int vaddr = machine->ReadRegister(BAD_VADDR_REG);
 	unsigned int vpn = getVPN(vaddr); // sacarle el tamaño del desplazamiento.
-
-    DEBUG('e', "VPN: %d\n", vpn);
 
 	// para saber cual i hago FIFO
 	machine->GetMMU()->tlb[iTLB++%TLB_SIZE] = currentThread->space->GetPageTable()[vpn];

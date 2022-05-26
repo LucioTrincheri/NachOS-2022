@@ -56,6 +56,7 @@ Condition::Wait()
     semaphore->P();
     //! Se libera el semaforo y se lo elimina de la lista.
     waiting->Remove(semaphore);
+    delete semaphore;
     cond->Acquire();
 }
 
@@ -67,7 +68,6 @@ Condition::Signal()
     Semaphore *semaphore = waiting->Pop();
     if (semaphore != nullptr) {
         semaphore->V();
-        semaphore->~Semaphore();
     }    
 }
 
@@ -79,6 +79,5 @@ Condition::Broadcast()
     while (!waiting->IsEmpty()) {
         semaphore = waiting->Pop();
         semaphore->V();
-        semaphore->~Semaphore();
     }  
 }

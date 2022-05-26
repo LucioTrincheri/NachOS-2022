@@ -20,7 +20,7 @@ void ReadBufferFromUser(int userAddress, char *outBuffer,
     do {
         int temp;
         count++;
-        while(machine->ReadMem(userAddress, 1, &temp) == false);
+        machine->ReadMemAbs(userAddress, 1, &temp);
         userAddress ++;
         *outBuffer = (unsigned char) temp;
         outBuffer++;
@@ -36,7 +36,7 @@ void WriteBufferToUser(const char *buffer, int userAddress,
 
     unsigned count = 0;
     do {
-        while(machine->WriteMem(userAddress, 1, buffer[count++]) == false);
+        machine->WriteMemAbs(userAddress, 1, buffer[count++]);
         userAddress++;
     } while (count < byteCount);
 }
@@ -52,7 +52,7 @@ bool ReadStringFromUser(int userAddress, char *outString,
     do {
         int temp;
         count++;
-        while(machine->ReadMem(userAddress, 1, &temp) == false);
+        machine->ReadMemAbs(userAddress, 1, &temp);
         userAddress ++;
 
         *outString = (unsigned char) temp;
@@ -68,8 +68,8 @@ void WriteStringToUser(const char *string, int userAddress)
 
     unsigned count = 0;
     do {
-        while(machine->WriteMem(userAddress, 1, string[count++]) == false);
+        machine->WriteMemAbs(userAddress, 1, string[count++]);
         userAddress++;
     } while (string[count] != '\0');
-    while(machine->WriteMem(userAddress, 1, '\0') == false);
+    machine->WriteMemAbs(userAddress, 1, '\0');
 }

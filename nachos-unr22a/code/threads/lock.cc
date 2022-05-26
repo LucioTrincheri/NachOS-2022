@@ -33,7 +33,7 @@ Lock::Lock(const char *debugName)
 
 Lock::~Lock()
 {
-    semaphore->~Semaphore();
+    delete semaphore;
 }
 
 const char *

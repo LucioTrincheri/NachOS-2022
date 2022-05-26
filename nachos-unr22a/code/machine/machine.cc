@@ -11,6 +11,7 @@
 #include "machine.hh"
 #include "threads/system.hh"
 
+#define LIM_TLB_RW 10
 
 static inline bool
 IsExceptionType(ExceptionType t)
@@ -94,8 +95,8 @@ Machine::WriteRegister(unsigned num, int value)
 bool
 Machine::ReadMem(unsigned addr, unsigned size, int *value)
 {
+    stats->TLBTotals ++;
     ExceptionType e = mmu.ReadMem(addr, size, value);
-    stats->TBLTotals ++;
     if (e != NO_EXCEPTION) {
         RaiseException(e, addr);
         return false;
@@ -104,13 +105,51 @@ Machine::ReadMem(unsigned addr, unsigned size, int *value)
 }
 
 bool
+Machine::ReadMemAbs(unsigned addr, unsigned size, int *value)
+{
+    int cErr = 0;
+    while(machine->ReadMem(addr, size, value) == false && cErr < LIM_TLB_RW) {
+        cErr ++;
+    };
+
+    if (cErr == LIM_TLB_RW) {
+        return false;
+    }
+
+    if (cErr != 0) {
+        stats->TLBTotals --;
+        stats->TLBMisses += cErr;
+    }
+    return true;
+}
+
+bool
 Machine::WriteMem(unsigned addr, unsigned size, int value)
 {
+    stats->TLBTotals ++;
     ExceptionType e = mmu.WriteMem(addr, size, value);
-    stats->TBLTotals ++;
     if (e != NO_EXCEPTION) {
         RaiseException(e, addr);
         return false;
+    }
+    return true;
+}
+
+bool
+Machine::WriteMemAbs(unsigned addr, unsigned size, int value)
+{
+    int cErr = 0;
+    while(machine->WriteMem(addr, size, value) == false && cErr < LIM_TLB_RW) {
+        cErr ++;
+    };
+
+    if (cErr == LIM_TLB_RW) {
+        return false;
+    }
+
+    if (cErr != 0) {
+        stats->TLBTotals --;
+        stats->TLBMisses += cErr;
     }
     return true;
 }

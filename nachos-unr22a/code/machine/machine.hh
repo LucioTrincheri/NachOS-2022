@@ -90,7 +90,11 @@ public:
 
     bool ReadMem(unsigned addr, unsigned size, int *value);
 
+    bool ReadMemAbs(unsigned addr, unsigned size, int *value);
+
     bool WriteMem(unsigned addr, unsigned size, int value);
+    
+    bool WriteMemAbs(unsigned addr, unsigned size, int value);
 
     /// Print the user CPU and memory state.
     void DumpState();
