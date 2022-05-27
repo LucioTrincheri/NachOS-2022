@@ -109,8 +109,10 @@ AddressSpace::AddressSpace(OpenFile *executable_file)
 AddressSpace::~AddressSpace()
 {
     // Liberamos los marcos utilizados por el proceso
-    for(unsigned p = 0; p < loadedPages; p++) {
-        usedPages->Clear(pageTable[p].physicalPage);
+    for(unsigned p = 0; p < numPages; p++) {
+        if (pageTable[p].physicalPage != -1) {
+            usedPages->Clear(pageTable[p].physicalPage);
+        }
     }
     delete [] pageTable;
     DEBUG('p', "Deleted page table\n");
