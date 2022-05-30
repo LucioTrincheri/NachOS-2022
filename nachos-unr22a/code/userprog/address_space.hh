@@ -65,7 +65,6 @@ private:
     /// Number of pages in the virtual address space.
     unsigned numPages;
     unsigned loadedPages;
-
     unsigned size;
     uint32_t codeSize;
     uint32_t codeAddrStart;
@@ -74,6 +73,7 @@ private:
     uint32_t initDataAddrStart;
     uint32_t initDataAddrEnd;
     Executable *exe;
+    OpenFile *executable_file;
 
 };
 

@@ -5,18 +5,17 @@
 /// All rights reserved.  See `copyright.h` for copyright notice and
 /// limitation of liability and disclaimer of warranty provisions.
 
-
 #include "address_space.hh"
 #include "executable.hh"
 #include "threads/system.hh"
-#include <algorithm>
-#include <stdint.h>
-
-#include <string.h>
-
 #include "lib/bitmap.hh"
 #include "mmu.hh" //NUM_PHYS_PAGES
 
+#include <algorithm>
+#include <stdint.h>
+#include <string.h>
+
+// para testear facilmente
 #define DEMAND_LOADING = 1
 
 Bitmap *usedPages = new Bitmap(NUM_PHYS_PAGES);
@@ -39,38 +38,32 @@ const uint32_t dataOffset(const uint32_t dataSize, const uint32_t dataAddrStart,
     ASSERT(data_offset < dataSize);
     return data_offset;
 }
-//bool
-//AddressSpace::isMemoryFull(){
-//    return fullMemory;
-//}
-/// First, set up the translation from program memory to physical memory.
-/// For now, this is really simple (1:1), since we are only uniprogramming,
-/// and we have a single unsegmented page table.
-AddressSpace::AddressSpace(OpenFile *executable_file)
-{
-    ASSERT(executable_file != nullptr);
 
-    exe = new Executable(executable_file);
+AddressSpace::AddressSpace(OpenFile *_executable_file)
+{
+    ASSERT(_executable_file != nullptr);
+
+    executable_file = _executable_file;
+    exe = new Executable(_executable_file);
     
     // How big is address space?
-
     size = exe->GetSize() + USER_STACK_SIZE;
-      // We need to increase the size to leave room for the stack.
+    // We need to increase the size to leave room for the stack.
     numPages = DivRoundUp(size, PAGE_SIZE);
-    loadedPages = 0;
-    size = numPages * PAGE_SIZE;
-
     if (numPages > usedPages->CountClear()) {
         fullMemory = true;
         return;
     }
     fullMemory = false;
+    DEBUG('p', "Initializing address space, num pages %u, size %u\n", numPages, size);
 
-    DEBUG('p', "Initializing address space, num pages %u, size %u\n",
-          numPages, size);
+    loadedPages = 0;
+    size = numPages * PAGE_SIZE;
 
     // Accedo a la MMU antes ya que necesito hacer memset en la posición de memoria durante el TranslationEntry
     char *mainMemory = machine->GetMMU()->mainMemory;
+
+    pageTable = new TranslationEntry[numPages];
 
     codeSize = exe->GetCodeSize();
     codeAddrStart = exe->GetCodeAddr();
@@ -80,8 +73,9 @@ AddressSpace::AddressSpace(OpenFile *executable_file)
     initDataAddrStart = exe->GetInitDataAddr();
     initDataAddrEnd = initDataAddrStart + initDataSize - 1;
 
-    pageTable = new TranslationEntry[numPages];
 #ifndef DEMAND_LOADING
+    // En el caso en el que este desactivada la carga por 
+    // demanda se cargan todas las paginas a memoria al principio.
     for (unsigned i = 0; i < numPages; i++) {
         LoadPage(i);        
     }
@@ -91,17 +85,12 @@ AddressSpace::AddressSpace(OpenFile *executable_file)
         usedPages->Print();
     }
 #else
-    DEBUG('e', "Antes del for de inicializacion\n");
-    
+    // Se inicializan las paginas con una direccion fisica invalidad para poder 
+    // distingir entre las que estan cargadas y las que no.
     for (unsigned i = 0; i < numPages; i++) {
-        //const uint32_t pageAddrStart = i * PAGE_SIZE;
-        //const uint32_t pageAddrEnd = pageAddrStart + PAGE_SIZE - 1;
         pageTable[i].virtualPage  = i;
         pageTable[i].physicalPage = -1;
         pageTable[i].valid        = true;
-        //pageTable[i].readOnly     = codeSize > 0 && pageAddrStart <= codeAddrEnd && pageAddrEnd >= codeAddrStart && !(codeAddrEnd < pageAddrEnd);
-        //pageTable[i].use          = false;
-        //pageTable[i].dirty        = false;
     }
 #endif
 }
@@ -119,8 +108,11 @@ AddressSpace::~AddressSpace()
     if (debug.IsEnabled('p')) {
         usedPages->Print();
     }
+    // Se elimina el archivo 
+    delete executable_file;
     DEBUG('a', "Deleted user address space\n");
 }
+
 void
 AddressSpace::LoadPage(int vpn) {
     const uint32_t pageAddrStart = vpn * PAGE_SIZE;
@@ -128,10 +120,6 @@ AddressSpace::LoadPage(int vpn) {
     loadedPages++;
     const int physical = usedPages->Find();
     char *mainMemory = machine->GetMMU()->mainMemory;
-    DEBUG('p', "Luego de la copia\n");
-
-    OpenFile * hola = fileSystem->Open("userland/shell");
-    Executable * exe1 = new Executable(hola);
 
     pageTable[vpn].virtualPage  = vpn;
     pageTable[vpn].physicalPage = physical;
@@ -143,7 +131,6 @@ AddressSpace::LoadPage(int vpn) {
     mainMemory = machine->GetMMU()->mainMemory;
     DEBUG('p', "Zeroing out virtual page %u, physical page: %u\n", vpn, physical);
     memset(&mainMemory[physical * PAGE_SIZE], 0, PAGE_SIZE);
-    DEBUG('p', "luego de setear en 0 la pagina en la memoria fisica\n");
 
     if (codeSize > 0 && pageAddrStart <= codeAddrEnd && pageAddrEnd >= codeAddrStart) {
         DEBUG('p', "Entro al primer if\n");
@@ -155,12 +142,7 @@ AddressSpace::LoadPage(int vpn) {
 
         DEBUG('p', "Copying code block from 0x%X to 0x%X (%u bytes) into physical page %u\n",
             code_offset, code_offset + code_bytes - 1, code_bytes, physical);
-        DEBUG('e', "Values dt.data_bytes = %u, dt.memory_offset = %u, dt.data_offset = %u\n", code_bytes, memory_offset, code_offset);
-        DEBUG('e', "tamanio de exe %d\n", exe->GetSize());
-        DEBUG('e', "main memory %s\n", mainMemory);
-        DEBUG('e', "main memory completa %s\n", &mainMemory[physical * PAGE_SIZE + memory_offset]);
         exe->ReadCodeBlock(&mainMemory[physical * PAGE_SIZE + memory_offset], code_bytes, code_offset);
-        DEBUG('p', "Termino el primer if\n");
     }
     
     /*
@@ -194,7 +176,6 @@ AddressSpace::LoadPage(int vpn) {
         exe.ReadCodeBlock(&mainMemory[physical * PAGE_SIZE + memory_offset], data_bytes, data_offset);
     */
 }
-
 
 /// Set the initial values for the user-level register set.
 ///
