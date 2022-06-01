@@ -141,7 +141,6 @@ Machine::WriteMemAbs(unsigned addr, unsigned size, int value)
     int cErr = 0;
     while(machine->WriteMem(addr, size, value) == false && cErr < LIM_TLB_RW) {
         cErr ++;
-        DEBUG('p', "sumo 1\n");
 
     };
 

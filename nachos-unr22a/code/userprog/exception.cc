@@ -198,11 +198,6 @@ SyscallHandler(ExceptionType _et)
         case SC_EXIT: {
             int status = machine->ReadRegister(4);
             DEBUG('e', "`Exit` requested with code %d.\n", status);
-            
-            if (currentThread->space != nullptr) {
-                delete currentThread->space;
-                currentThread->space = nullptr;
-            }
 
             currentThread->Finish(status); // Esto pone al thread como threadToBeDestroyed, lo cual el scheduler llama a ~Thread, lo cual libera el stack.
             ASSERT(false);
@@ -451,13 +446,12 @@ SyscallHandler(ExceptionType _et)
             if (addrSpc->fullMemory) {
                 DEBUG('e', "Error: Insufficient memory size for address space.\n");
                 machine->WriteRegister(2, -1);
-                //delete openFile;
                 delete addrSpc; // Puede no ser necesario
                 break;
             }
             // pasamos en exec un argumento mas que es si es joineable o no el thread.
             bool joinable = machine->ReadRegister(6);
-            Thread *thread = new Thread("filename", joinable, 0);
+            Thread *thread = new Thread(filename, joinable, 0);
 
             userThreadsLock->Acquire();
             int pid = userThreads->Add(thread);
@@ -511,7 +505,7 @@ static void
 PageFaultHandler(ExceptionType _et) {
 
     stats->TLBMisses ++;
-    DEBUG('p', "TBLMisses plus one in PageHandler\n");
+    DEBUG('p', "TLBMisses plus one in PageHandler\n");
 	// rellenar la TLB con una entrada validad para la pagina quefallo
     DEBUG('p', "%s\n", ExceptionTypeToString(_et));
 
@@ -520,10 +514,25 @@ PageFaultHandler(ExceptionType _et) {
 	unsigned int vpn = getVPN(vaddr); // sacarle el tamaño del desplazamiento.
 
 	// para saber cual i hago FIFO
-    if (currentThread->space->GetPageTable()[vpn].physicalPage == -1) {
+    // Solo es necesario cargar paginas si hay DEMAND_LOADING TODO con bandera SWAP hay que ver si physicalPage es -2 tambien. Ver que hacer con load page si no se puede cargar (solo con DEMAND_LOADING sin SWAP).
+#ifdef DEMAND_LOADING
+#ifdef SWAP
+    if (currentThread->space->GetPageTable()[vpn].physicalPage == -1 || currentThread->space->GetPageTable()[vpn].physicalPage == -2) {
         DEBUG('p', "Must be -1: %d\n", currentThread->space->GetPageTable()[vpn].physicalPage);
         currentThread->space->LoadPage(vpn);
     }
+#else
+    // Si no hay swap, como se hizo en EXEC es necesario que algun programa finalice su ejecucion. Esto lo realiza el que no puede cargar su proxima pagina.
+    if (currentThread->space->GetPageTable()[vpn].physicalPage == -1) {
+        DEBUG('p', "Must be -1: %d\n", currentThread->space->GetPageTable()[vpn].physicalPage);
+        currentThread->space->LoadPage(vpn);
+        if (currentThread->space->fullMemory) {
+            DEBUG('p', "Memory full, can't load page, exiting process.\n");
+            currentThread->Finish(-1);
+        }
+    }
+#endif
+#endif
     DEBUG('p', "Physical page addr: %d\n", currentThread->space->GetPageTable()[vpn].physicalPage);
 	machine->GetMMU()->tlb[iTLB++%TLB_SIZE] = currentThread->space->GetPageTable()[vpn];
 }

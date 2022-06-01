@@ -50,6 +50,10 @@ Bitmap::Mark(unsigned which)
 void
 Bitmap::Clear(unsigned which)
 {
+    //TODO borrar estas 3 lineas
+    if(which >= 128) {
+        printf(" --------------------------------- NumBits: %d ------------------ Which: %d\n", numBits, which);
+    }
     ASSERT(which < numBits);
     map[which / BITS_IN_WORD] &= ~(1 << which % BITS_IN_WORD);
 }

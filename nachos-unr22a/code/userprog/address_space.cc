@@ -14,11 +14,14 @@
 #include <algorithm>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
-// para testear facilmente
-#define DEMAND_LOADING = 1
+#define NOT_LOAD_ADDR -1
+#define ADDR_IN_SWAP -2
 
 Bitmap *usedPages = new Bitmap(NUM_PHYS_PAGES);
+Lock *usedPagesLock = new Lock("usedPagesLock");
+// TODO crear lock y lockear operaciones de bitmap.
 
 // Estas funciones pueden reemplazar lo que se realizan en las lineas 107 a 116 y 131 a 140.
 // No se pueden realizar las llamas a estas funciones ya que por lo aparente, la MMU traduce tambien estas llamadas.
@@ -50,20 +53,17 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
     size = exe->GetSize() + USER_STACK_SIZE;
     // We need to increase the size to leave room for the stack.
     numPages = DivRoundUp(size, PAGE_SIZE);
-    if (numPages > usedPages->CountClear()) {
-        fullMemory = true;
-        return;
-    }
-    fullMemory = false;
+    pageTable = new TranslationEntry[numPages]; // Movimos esto aca porque la seguridad de fullMemory causaba problemas de seguridad al acceder a espacio no existente
+    //if (numPages > usedPages->CountClear()) {
+    //    printf("Memory full\n");
+    //    fullMemory = true;
+    //    return;
+    //}
+    fullMemory = false; // Al empezar el programa asumimos que hay memoria fisica disponible. Esto se comprueba mas adelante.
     DEBUG('p', "Initializing address space, num pages %u, size %u\n", numPages, size);
 
     loadedPages = 0;
     size = numPages * PAGE_SIZE;
-
-    // Accedo a la MMU antes ya que necesito hacer memset en la posición de memoria durante el TranslationEntry
-    char *mainMemory = machine->GetMMU()->mainMemory;
-
-    pageTable = new TranslationEntry[numPages];
 
     codeSize = exe->GetCodeSize();
     codeAddrStart = exe->GetCodeAddr();
@@ -72,12 +72,25 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
     initDataSize = exe->GetInitDataSize();
     initDataAddrStart = exe->GetInitDataAddr();
     initDataAddrEnd = initDataAddrStart + initDataSize - 1;
+// Si no esta definida SWAP, podemos controlar antes si el programa puede ser cargado.
+
+
 
 #ifndef DEMAND_LOADING
+
+    usedPagesLock->Acquire();
+    if (numPages > usedPages->CountClear()) {
+        DEBUG('p', "numpages: %d, used: %d\n", numPages, usedPages->CountClear());
+        DEBUG('p', "Memory full, finishing process\n");
+        fullMemory = true;
+        usedPagesLock->Release();
+        return;
+    }
+    usedPagesLock->Release();
     // En el caso en el que este desactivada la carga por 
     // demanda se cargan todas las paginas a memoria al principio.
     for (unsigned i = 0; i < numPages; i++) {
-        LoadPage(i);        
+        LoadPage(i);
     }
     DEBUG('a', "Initialized user address space\n");
     DEBUG('p', "Initialized user page table\n");
@@ -89,7 +102,7 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
     // distingir entre las que estan cargadas y las que no.
     for (unsigned i = 0; i < numPages; i++) {
         pageTable[i].virtualPage  = i;
-        pageTable[i].physicalPage = -1;
+        pageTable[i].physicalPage = NOT_LOAD_ADDR;
         pageTable[i].valid        = true;
     }
 #endif
@@ -98,31 +111,81 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
 AddressSpace::~AddressSpace()
 {
     // Liberamos los marcos utilizados por el proceso
+    usedPagesLock->Acquire();
     for(unsigned p = 0; p < numPages; p++) {
-        if (pageTable[p].physicalPage != -1) {
+        if (pageTable[p].physicalPage != NOT_LOAD_ADDR) {
+            //printf("Pagina fisica a borrar: %d\n", pageTable[p].physicalPage);
+
             usedPages->Clear(pageTable[p].physicalPage);
         }
     }
+    usedPagesLock->Release();
     delete [] pageTable;
     DEBUG('p', "Deleted page table\n");
     if (debug.IsEnabled('p')) {
         usedPages->Print();
     }
+
     // Se elimina el archivo 
-    delete executable_file;
+    // delete executable_file;
     DEBUG('a', "Deleted user address space\n");
 }
 
+/*
+LoadPage ->
+
+    - physical > 0  -> esta cargada en memoria lista.
+    - physical = -1 -> nunca se cargó (ni esta en swap), entonces pedir al bitmap direccion y copiar datos a mainMemory.
+    - physical = -2 -> esta en swap. Para cargarla a mainMemory leer en el bloque vpn del archivo una pagina.
+
+Bitmap -> Coremap->ID: 1:Bitmap + 2:Corematabla(pagRandom) = struct abajo
+
+struct {
+    vpn;
+    thread (pid);
+}
+
+Funcionalidades de SWAP
+thread->space->StorePageInYourSWAP(vpn)
+thread->space->LoadPageFromYourSWAP(vpn)
+
+
+- Acordarnos que bitmap tiene que llevar lock porque dos threads pueden pensar que una pagina fisicaa esta libre y realmente no alcanza para ambos. SegFault
+- Si al agarrarte una nueva pagina se llega a borrar una pagina tuya que esta en la TLB (redundante), hay que invalidar la entrada.
+- Hacer funcion que guarde pagina virtual en swap (StorePage) (thread->space->StorePageInYourSWAP(vpn)). Esto es T1 dada la pagina fisica a reemplaza, accede a coreMap en ese valor, agarrar el thread de la struct, y con ese puntero thread le envia la vpn del struct para que se la guarde en SWAP. GetFromSwap es similar.
+- Una vez guardada en la swap la pagina del otro thread, se ocupa la direccion fisica con la pagina a cargar.
+
+
+Thread 1 Agarro pagina 50 fisica. Esta pertenece a thread 2 vpn 4.
+Fisica -> thread y vpn
+    -1 nunca se cargo
+    >0 esta en ran
+    -2 esta en disco -> vpn se guarda en el bloque vpn del disco
+*/
 void
 AddressSpace::LoadPage(int vpn) {
+    usedPagesLock->Acquire();
+    if (usedPages->CountClear() == 0) {
+        DEBUG('p', "Memoria llena, no se puede cargar la pagina.\n");
+        fullMemory = true;
+        usedPagesLock->Release();
+        return;
+        // El programa no puede continuar ejecutandose.
+    }
+    DEBUG('p', "used: %d\n", usedPages->CountClear());
+    const int physical = usedPages->Find();
+    usedPagesLock->Release();
+    fullMemory = false; //! Esto no es necesario, viene seteado de false del constructor
     const uint32_t pageAddrStart = vpn * PAGE_SIZE;
     const uint32_t pageAddrEnd = pageAddrStart + PAGE_SIZE - 1;
     loadedPages++;
-    const int physical = usedPages->Find();
+
     char *mainMemory = machine->GetMMU()->mainMemory;
 
     pageTable[vpn].virtualPage  = vpn;
     pageTable[vpn].physicalPage = physical;
+
+
     pageTable[vpn].valid        = true;
     pageTable[vpn].readOnly     = codeSize > 0 && pageAddrStart <= codeAddrEnd && pageAddrEnd >= codeAddrStart && !(codeAddrEnd < pageAddrEnd);
     pageTable[vpn].use          = false;
@@ -133,7 +196,6 @@ AddressSpace::LoadPage(int vpn) {
     memset(&mainMemory[physical * PAGE_SIZE], 0, PAGE_SIZE);
 
     if (codeSize > 0 && pageAddrStart <= codeAddrEnd && pageAddrEnd >= codeAddrStart) {
-        DEBUG('p', "Entro al primer if\n");
         const uint32_t code_bytes = std::min(codeAddrEnd, pageAddrEnd) - std::max(codeAddrStart, pageAddrStart) + 1;
 
         const uint32_t memory_offset = (codeAddrStart > pageAddrStart) ? (codeAddrStart - pageAddrStart) : 0;

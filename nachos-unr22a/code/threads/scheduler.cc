@@ -124,7 +124,6 @@ Scheduler::Run(Thread *nextThread)
     // were still running on the old thread's stack!
     if (threadToBeDestroyed != nullptr) {
         DEBUG('t', "Now in thread \"%s\"\n", currentThread->GetName());
-        scheduler->Print();
         delete threadToBeDestroyed;
         threadToBeDestroyed = nullptr;
     }

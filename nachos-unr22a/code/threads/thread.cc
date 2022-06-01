@@ -93,6 +93,11 @@ Thread::~Thread()
     {
        delete canal;
     }
+
+    #ifdef USER_PROGRAM
+        delete openFiles;
+        delete space;
+    #endif
 }
 
 /// Invoke `(*func)(arg)`, allowing caller and callee to execute
