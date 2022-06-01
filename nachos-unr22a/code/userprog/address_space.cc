@@ -10,17 +10,27 @@
 #include "threads/system.hh"
 #include "lib/bitmap.hh"
 #include "mmu.hh" //NUM_PHYS_PAGES
+#include "vmem/coremap.hh"
 
 #include <algorithm>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 
+#define SWAP 1
+#define DEMAND_LOADING 1
+
 #define NOT_LOAD_ADDR -1
 #define ADDR_IN_SWAP -2
 
+#ifndef SWAP
 Bitmap *usedPages = new Bitmap(NUM_PHYS_PAGES);
+#else
+Coremap *coremap = new Coremap(NUM_PHYS_PAGES);
+#endif
 Lock *usedPagesLock = new Lock("usedPagesLock");
+
+
 // TODO crear lock y lockear operaciones de bitmap.
 
 // Estas funciones pueden reemplazar lo que se realizan en las lineas 107 a 116 y 131 a 140.
@@ -62,7 +72,6 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
     fullMemory = false; // Al empezar el programa asumimos que hay memoria fisica disponible. Esto se comprueba mas adelante.
     DEBUG('p', "Initializing address space, num pages %u, size %u\n", numPages, size);
 
-    loadedPages = 0;
     size = numPages * PAGE_SIZE;
 
     codeSize = exe->GetCodeSize();
@@ -98,6 +107,15 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
         usedPages->Print();
     }
 #else
+#ifdef SWAP
+    // TODO mejorar nombre archivo
+    char fileName[FILE_NAME_MAX_LEN + 5];
+    snprintf(fileName, sizeof(fileName), "SWAP.%d", currentThread);
+
+    ASSERT(fileSystem->Create(fileName, size));
+    file_swap = fileSystem->Open(fileName);
+
+#endif
     // Se inicializan las paginas con una direccion fisica invalidad para poder 
     // distingir entre las que estan cargadas y las que no.
     for (unsigned i = 0; i < numPages; i++) {
@@ -111,11 +129,13 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
 AddressSpace::~AddressSpace()
 {
     // Liberamos los marcos utilizados por el proceso
+
+    //TODO usedpages no esta definido en no swap. Limpiar lo que hay en el coremap tambien!!!!!!!
+
+
     usedPagesLock->Acquire();
     for(unsigned p = 0; p < numPages; p++) {
-        if (pageTable[p].physicalPage != NOT_LOAD_ADDR) {
-            //printf("Pagina fisica a borrar: %d\n", pageTable[p].physicalPage);
-
+        if (pageTable[p].physicalPage != NOT_LOAD_ADDR && pageTable[p].physicalPage != ADDR_IN_SWAP) {
             usedPages->Clear(pageTable[p].physicalPage);
         }
     }
@@ -126,28 +146,22 @@ AddressSpace::~AddressSpace()
         usedPages->Print();
     }
 
-    // Se elimina el archivo 
-    // delete executable_file;
+    // Se elimina el archivo lo descomente
+    delete executable_file;
+    
+#ifdef SWAP
+    char fileName[FILE_NAME_MAX_LEN + 5];
+    snprintf(fileName, sizeof(fileName), "SWAP.%d", currentThread);
+    delete file_swap;
+    fileSystem->Remove(fileName);
+#endif
+
     DEBUG('a', "Deleted user address space\n");
 }
 
+// Esta funcion es invocada por otro thread que nos dice que guardemos la pagina vpn pasada en nuestra SWAP.
+// Dado una pagina virtual
 /*
-LoadPage ->
-
-    - physical > 0  -> esta cargada en memoria lista.
-    - physical = -1 -> nunca se cargó (ni esta en swap), entonces pedir al bitmap direccion y copiar datos a mainMemory.
-    - physical = -2 -> esta en swap. Para cargarla a mainMemory leer en el bloque vpn del archivo una pagina.
-
-Bitmap -> Coremap->ID: 1:Bitmap + 2:Corematabla(pagRandom) = struct abajo
-
-struct {
-    vpn;
-    thread (pid);
-}
-
-Funcionalidades de SWAP
-thread->space->StorePageInYourSWAP(vpn)
-thread->space->LoadPageFromYourSWAP(vpn)
 
 
 - Acordarnos que bitmap tiene que llevar lock porque dos threads pueden pensar que una pagina fisicaa esta libre y realmente no alcanza para ambos. SegFault
@@ -155,37 +169,18 @@ thread->space->LoadPageFromYourSWAP(vpn)
 - Hacer funcion que guarde pagina virtual en swap (StorePage) (thread->space->StorePageInYourSWAP(vpn)). Esto es T1 dada la pagina fisica a reemplaza, accede a coreMap en ese valor, agarrar el thread de la struct, y con ese puntero thread le envia la vpn del struct para que se la guarde en SWAP. GetFromSwap es similar.
 - Una vez guardada en la swap la pagina del otro thread, se ocupa la direccion fisica con la pagina a cargar.
 
-
-Thread 1 Agarro pagina 50 fisica. Esta pertenece a thread 2 vpn 4.
-Fisica -> thread y vpn
-    -1 nunca se cargo
-    >0 esta en ran
-    -2 esta en disco -> vpn se guarda en el bloque vpn del disco
 */
+
 void
-AddressSpace::LoadPage(int vpn) {
-    usedPagesLock->Acquire();
-    if (usedPages->CountClear() == 0) {
-        DEBUG('p', "Memoria llena, no se puede cargar la pagina.\n");
-        fullMemory = true;
-        usedPagesLock->Release();
-        return;
-        // El programa no puede continuar ejecutandose.
-    }
-    DEBUG('p', "used: %d\n", usedPages->CountClear());
-    const int physical = usedPages->Find();
-    usedPagesLock->Release();
-    fullMemory = false; //! Esto no es necesario, viene seteado de false del constructor
+AddressSpace::LoadPageFromCode(int vpn, int physical)
+{
     const uint32_t pageAddrStart = vpn * PAGE_SIZE;
     const uint32_t pageAddrEnd = pageAddrStart + PAGE_SIZE - 1;
-    loadedPages++;
 
     char *mainMemory = machine->GetMMU()->mainMemory;
 
     pageTable[vpn].virtualPage  = vpn;
     pageTable[vpn].physicalPage = physical;
-
-
     pageTable[vpn].valid        = true;
     pageTable[vpn].readOnly     = codeSize > 0 && pageAddrStart <= codeAddrEnd && pageAddrEnd >= codeAddrStart && !(codeAddrEnd < pageAddrEnd);
     pageTable[vpn].use          = false;
@@ -237,6 +232,107 @@ AddressSpace::LoadPage(int vpn) {
             data_offset, data_offset + data_bytes - 1, data_bytes, physical);
         exe.ReadCodeBlock(&mainMemory[physical * PAGE_SIZE + memory_offset], data_bytes, data_offset);
     */
+}
+
+
+
+
+
+
+#ifdef SWAP
+int
+AddressSpace::PickVictim()
+{
+    return std::rand() % NUM_PHYS_PAGES;
+}
+
+
+
+bool
+AddressSpace::StorePageInSWAP(int vpn)
+{
+    int physical = pageTable[vpn].physicalPage;
+    char* addrMemStart = &machine->GetMMU()->mainMemory[physical * PAGE_SIZE];
+    bool correct = (file_swap->WriteAt(addrMemStart, PAGE_SIZE, vpn * PAGE_SIZE) == PAGE_SIZE);
+
+    pageTable[vpn].physicalPage = ADDR_IN_SWAP;
+
+    return correct;
+
+}
+
+
+bool
+AddressSpace::LoadPageFromSWAP(int vpn, int physical){
+    char* addrMemStart = &machine->GetMMU()->mainMemory[physical * PAGE_SIZE];
+    bool correct = (file_swap->ReadAt(addrMemStart, PAGE_SIZE, vpn * PAGE_SIZE) == PAGE_SIZE);
+
+    pageTable[vpn].virtualPage  = vpn;
+    pageTable[vpn].physicalPage = physical;
+    pageTable[vpn].use          = false;
+    pageTable[vpn].dirty        = false;
+
+    return correct;
+}
+#endif
+
+void
+AddressSpace::LoadPage(int vpn) {
+// Si SWAP no esta activada ------------------------------------------------------------------
+#ifndef SWAP
+    usedPagesLock->Acquire();
+    if (usedPages->CountClear() == 0) {
+        DEBUG('p', "Memoria llena, no se puede cargar la pagina.\n");
+        fullMemory = true;
+        usedPagesLock->Release();
+        return;
+        // El programa no puede continuar ejecutandose.
+    }
+    
+    DEBUG('p', "used: %d\n", usedPages->CountClear());
+    const int physical = usedPages->Find();
+    usedPagesLock->Release();
+#else
+// Si SWAP esta activada ---------------------------------------------------------------------
+    usedPagesLock->Acquire();
+    int physical = coremap->Find(vpn);
+    // No hay lugar para cargar la pagina en memoria. Se tiene que reemplazar una pagina actual.
+    while (physical == -1) {
+        int pv = PickVictim();
+        if (!coremap->addressInfo[pv].loading){
+            coremap->addressInfo[pv].loading = true;
+            physical = pv;
+            usedPagesLock->Release();
+        }
+    }
+    AddressInfoEntry victim = coremap->addressInfo[physical];
+    // Si la victima es una pagina nuestra y ademas esta en la tlb hay que invalidar la entrada.
+    for(unsigned int i=0; i<TLB_SIZE; i++) {
+        if (machine->GetMMU()->tlb[i].virtualPage == victim.vpn) {
+            machine->GetMMU()->tlb[victim.vpn].valid = false;
+            break;
+        }
+    }
+    // Estimamos que nunca falle, si lo el sistema swap esta corrupto
+    ASSERT(victim.thread->space->StorePageInSWAP(victim.vpn));  // Si el ASSERT va a ser eliminado, checkear la llamada porque pageTable queda incorrecta
+
+    coremap->addressInfo[physical].vpn = vpn;
+    coremap->addressInfo[physical].thread = currentThread;
+#endif
+    // Ahora tenemos una pagina disponible en memoria. Hay que ver de donde se carga la información.
+    if (pageTable[vpn].physicalPage == NOT_LOAD_ADDR) {
+        // Nunca se cargo, (LoadFromCode)
+        LoadPageFromCode(vpn, physical); //TODO ver si es necesario un ASSERT
+    }
+
+    if (pageTable[vpn].physicalPage == ADDR_IN_SWAP) {
+        ASSERT(LoadPageFromSWAP(vpn, physical)); // Si el ASSERT va a ser eliminado, checkear la llamada porque pageTable queda incorrecta
+    }
+    usedPagesLock->Acquire();
+    coremap->addressInfo[physical].loading = false;
+    usedPagesLock->Release();
+
+    return;
 }
 
 /// Set the initial values for the user-level register set.

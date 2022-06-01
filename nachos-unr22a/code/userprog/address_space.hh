@@ -12,7 +12,7 @@
 
 #ifndef NACHOS_USERPROG_ADDRESSSPACE__HH
 #define NACHOS_USERPROG_ADDRESSSPACE__HH
-
+#define SWAP 1
 
 #include <algorithm>
 #include "filesys/file_system.hh"
@@ -64,7 +64,6 @@ private:
 
     /// Number of pages in the virtual address space.
     unsigned numPages;
-    unsigned loadedPages;
     unsigned size;
     uint32_t codeSize;
     uint32_t codeAddrStart;
@@ -74,7 +73,14 @@ private:
     uint32_t initDataAddrEnd;
     Executable *exe;
     OpenFile *executable_file;
+    OpenFile *file_swap;
 
+    int PickVictim();
+#ifdef SWAP
+    bool StorePageInSWAP(int vpn);
+    void LoadPageFromCode(int vpn, int physical);
+    bool LoadPageFromSWAP(int vpn, int physical);
+#endif
 };
 
 
