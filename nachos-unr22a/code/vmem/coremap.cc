@@ -16,6 +16,12 @@ Coremap::Coremap(unsigned nitems)
     addressInfo = new AddressInfoEntry[nitems];
     bitmap = new Bitmap(nitems);
     lock = new Lock("coremapLock");
+    DEBUG('p', "Inicializando coremap\n");
+    //for(int i = 0; i < nitems; i++) {
+    //    DEBUG('p', "Inicializando coremap\n");
+    //    addressInfo[i].thread = nullptr;
+    //    addressInfo[i].vpn = -1;
+    //}
 }
 
 /// De-allocate a bitmap.
@@ -40,14 +46,7 @@ Coremap::Find(int vpn)
     int physicalAddr = bitmap->Find();
     if (physicalAddr == -1) {
         DEBUG('p', "Memory full, need to swap\n");
-        // Memory full
-        lock->Release();
-        return -1;
     }
-
-    addressInfo[physicalAddr].vpn = vpn;
-    addressInfo[physicalAddr].thread = currentThread;
-
     lock->Release();
     return physicalAddr;
 }

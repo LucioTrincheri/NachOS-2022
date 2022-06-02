@@ -31,7 +31,10 @@ StartProcess(const char *filename)
         return;
     }
 
-    AddressSpace *space = new AddressSpace(executable);
+    int pid = userThreads->Add(currentThread);
+    currentThread->pid = pid;
+
+    AddressSpace *space = new AddressSpace(executable, pid);
     currentThread->space = space;
 
     // delete executable;

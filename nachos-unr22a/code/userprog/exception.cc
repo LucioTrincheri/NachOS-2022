@@ -199,6 +199,7 @@ SyscallHandler(ExceptionType _et)
             int status = machine->ReadRegister(4);
             DEBUG('e', "`Exit` requested with code %d.\n", status);
 
+            userThreads->Remove(currentThread->pid);
             currentThread->Finish(status); // Esto pone al thread como threadToBeDestroyed, lo cual el scheduler llama a ~Thread, lo cual libera el stack.
             ASSERT(false);
         }
@@ -440,27 +441,29 @@ SyscallHandler(ExceptionType _et)
             }
 
             // userThreadsLock->Acquire(); // Puede ser necesario para que otro user thread no cambie full memory. Falso
-            AddressSpace *addrSpc = new AddressSpace(openFile); //Puede ser que falle si no hay mas memoria fisica.
-            // delete openFile;
-
-            if (addrSpc->fullMemory) {
-                DEBUG('e', "Error: Insufficient memory size for address space.\n");
-                machine->WriteRegister(2, -1);
-                delete addrSpc; // Puede no ser necesario
-                break;
-            }
             // pasamos en exec un argumento mas que es si es joineable o no el thread.
             bool joinable = machine->ReadRegister(6);
             Thread *thread = new Thread(filename, joinable, 0);
+            // delete openFile;
+
 
             userThreadsLock->Acquire();
             int pid = userThreads->Add(thread);
-
+            printf("PID: %d\n", pid);
             if (pid == -1){
                 DEBUG('e', "Error: Too many processes.\n");
                 machine->WriteRegister(2, -1);
                 delete thread;
-                delete addrSpc;
+                break;
+            }
+
+            thread->pid = pid;
+            AddressSpace *addrSpc = new AddressSpace(openFile, pid); //Puede ser que falle si no hay mas memoria fisica.
+            if (addrSpc->fullMemory) {
+                DEBUG('e', "Error: Insufficient memory size for address space.\n");
+                machine->WriteRegister(2, -1);
+                delete addrSpc; // Puede no ser necesario
+                delete thread;
                 break;
             }
 
@@ -527,7 +530,7 @@ PageFaultHandler(ExceptionType _et) {
         DEBUG('p', "Must be -1: %d\n", currentThread->space->GetPageTable()[vpn].physicalPage);
         currentThread->space->LoadPage(vpn);
         if (currentThread->space->fullMemory) {
-            DEBUG('p', "Memory full, can't load page, exiting process.\n");
+            DEBUG('p', "Memory full, can't load page, exiting process\n");
             currentThread->Finish(-1);
         }
     }

@@ -149,6 +149,8 @@ public:
     
     OpenFile* GetOpenFile(int openFileId);
 
+    int pid;
+
 private:
     // Some of the private data for this class is listed above.
 

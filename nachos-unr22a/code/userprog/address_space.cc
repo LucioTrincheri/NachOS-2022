@@ -17,9 +17,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#define SWAP 1
-#define DEMAND_LOADING 1
-
 #define NOT_LOAD_ADDR -1
 #define ADDR_IN_SWAP -2
 
@@ -30,10 +27,6 @@ Coremap *coremap = new Coremap(NUM_PHYS_PAGES);
 #endif
 Lock *usedPagesLock = new Lock("usedPagesLock");
 
-
-// TODO crear lock y lockear operaciones de bitmap.
-
-// Estas funciones pueden reemplazar lo que se realizan en las lineas 107 a 116 y 131 a 140.
 // No se pueden realizar las llamas a estas funciones ya que por lo aparente, la MMU traduce tambien estas llamadas.
 // Y los calculos de offsets se traducen de manera incorrecta.
 const uint32_t dataBytes(const uint32_t dataAddrStart, const uint32_t dataAddrEnd, const uint32_t pageAddrStart, const uint32_t pageAddrEnd){
@@ -52,10 +45,10 @@ const uint32_t dataOffset(const uint32_t dataSize, const uint32_t dataAddrStart,
     return data_offset;
 }
 
-AddressSpace::AddressSpace(OpenFile *_executable_file)
+AddressSpace::AddressSpace(OpenFile *_executable_file, int pid)
 {
     ASSERT(_executable_file != nullptr);
-
+    threadPid = pid;
     executable_file = _executable_file;
     exe = new Executable(_executable_file);
     
@@ -84,7 +77,6 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
 // Si no esta definida SWAP, podemos controlar antes si el programa puede ser cargado.
 
 
-
 #ifndef DEMAND_LOADING
 
     usedPagesLock->Acquire();
@@ -109,9 +101,9 @@ AddressSpace::AddressSpace(OpenFile *_executable_file)
 #else
 #ifdef SWAP
     // TODO mejorar nombre archivo
-    char fileName[FILE_NAME_MAX_LEN + 5];
-    snprintf(fileName, sizeof(fileName), "SWAP.%d", currentThread);
-
+    char fileName[5 + 5];
+    snprintf(fileName, sizeof(fileName), "SWAP.%d", threadPid);
+    printf("Valor filename en creacion de archivo: %s\n", fileName);
     ASSERT(fileSystem->Create(fileName, size));
     file_swap = fileSystem->Open(fileName);
 
@@ -134,24 +126,43 @@ AddressSpace::~AddressSpace()
 
 
     usedPagesLock->Acquire();
-    for(unsigned p = 0; p < numPages; p++) {
+#ifndef SWAP
+    for(unsigned p = 0;  p< numPages; p++) {
         if (pageTable[p].physicalPage != NOT_LOAD_ADDR && pageTable[p].physicalPage != ADDR_IN_SWAP) {
             usedPages->Clear(pageTable[p].physicalPage);
         }
     }
-    usedPagesLock->Release();
-    delete [] pageTable;
     DEBUG('p', "Deleted page table\n");
     if (debug.IsEnabled('p')) {
         usedPages->Print();
     }
+#else
+// Cambiar la funcion de carga en memoria para chekear si la entrada a esa pagina fisica esta en nullptr. Esto significa que nadie cargo esa pagina todavia.
+    for(unsigned p = 0; p < numPages; p++) {
+        //printf("Thread de pagina virtual %d, le corresponde pagina fisica %d, segun coremap thread correspondiente: %ld y currentThread: %ld\n",p,pageTable[p].physicalPage, coremap->addressInfo[pageTable[p].physicalPage].thread, currentThread); //TODO borrar este print
+        //if(pageTable[p].physicalPage != NOT_LOAD_ADDR && pageTable[p].physicalPage != ADDR_IN_SWAP && coremap->addressInfo[pageTable[p].physicalPage].thread == currentThread) { //! Todos los coremap->addressInfo[pageTable[p].physicalPage].thread y currentThread son siempre distintos. Nunca se borra ninguna pagina. Esto seguramente esta relacionado a que los archivos SWAP no se borran. No se si porque no coinciden los nombres o que. El que ejecuta los programas es siempre el shell, lo que hacer que no funcionen las comparaciones. Ademas, por eso todos los archivos de SWAP son compartidos
+        if(pageTable[p].physicalPage != NOT_LOAD_ADDR && pageTable[p].physicalPage != ADDR_IN_SWAP && (threadPid == coremap->addressInfo[pageTable[p].physicalPage].thread->space->threadPid)) { //! Ver si esto es correcto, checkeo si la persona que posee actualmente la pagina fisica que quiero borrar tiene el mismo pid que yo. Puede ser que sea necesario checkear si esta en loading. No creo que lo sea.
+        //if(pageTable[p].physicalPage != NOT_LOAD_ADDR && pageTable[p].physicalPage != ADDR_IN_SWAP) {
+            coremap->Clear(pageTable[p].physicalPage);
+            coremap->addressInfo[pageTable[p].physicalPage].thread = nullptr;
+            coremap->addressInfo[pageTable[p].physicalPage].loading = false;
+        }
+    }
+    if (debug.IsEnabled('p')) {
+    }
+    coremap->Print();
+#endif
+    usedPagesLock->Release();
+    
+    delete [] pageTable;
 
     // Se elimina el archivo lo descomente
     delete executable_file;
     
 #ifdef SWAP
-    char fileName[FILE_NAME_MAX_LEN + 5];
-    snprintf(fileName, sizeof(fileName), "SWAP.%d", currentThread);
+    char fileName[5 + 5];
+    snprintf(fileName, sizeof(fileName), "SWAP.%d", threadPid);
+    printf("Valor filename en destruccion de archivo: %s\n", fileName);
     delete file_swap;
     fileSystem->Remove(fileName);
 #endif
@@ -294,38 +305,54 @@ AddressSpace::LoadPage(int vpn) {
     usedPagesLock->Release();
 #else
 // Si SWAP esta activada ---------------------------------------------------------------------
+    DEBUG('p', "LoadPage\n");
     usedPagesLock->Acquire();
     int physical = coremap->Find(vpn);
-    // No hay lugar para cargar la pagina en memoria. Se tiene que reemplazar una pagina actual.
+    // Si es distinto de -1, entonces todavia hay lugar. No hacer pickvictim
+    // Sino, no hay lugar para cargar la pagina en memoria. Se tiene que reemplazar una pagina actual.
+
     while (physical == -1) {
+        printf("Entre a pick Victim\n");
         int pv = PickVictim();
         if (!coremap->addressInfo[pv].loading){
-            coremap->addressInfo[pv].loading = true;
+            printf("Pagina fisica a reemplazar: %d\n",pv);
+            printf("Pid del thread al que pertenece la pagina: %d, y vpn segun el thread victima: %d\n",coremap->addressInfo[pv].thread->space->threadPid, coremap->addressInfo[pv].vpn);
             physical = pv;
-            usedPagesLock->Release();
         }
     }
+    //!Cuidado que victim es por copia, lo que puede hacer que los valores no sean los reales de addressInfo
+    coremap->addressInfo[physical].loading = true;
     AddressInfoEntry victim = coremap->addressInfo[physical];
+    usedPagesLock->Release();
     // Si la victima es una pagina nuestra y ademas esta en la tlb hay que invalidar la entrada.
     for(unsigned int i=0; i<TLB_SIZE; i++) {
         if (machine->GetMMU()->tlb[i].virtualPage == victim.vpn) {
-            machine->GetMMU()->tlb[victim.vpn].valid = false;
+            machine->GetMMU()->tlb[victim.vpn].valid = false; //! Esto no deberia ser tlb[i].valid = false???
             break;
         }
     }
     // Estimamos que nunca falle, si lo el sistema swap esta corrupto
-    ASSERT(victim.thread->space->StorePageInSWAP(victim.vpn));  // Si el ASSERT va a ser eliminado, checkear la llamada porque pageTable queda incorrecta
 
+    if (victim.thread != nullptr){
+        DEBUG('p', "Antes de store\n");
+        ASSERT(victim.thread->space->StorePageInSWAP(victim.vpn));  // Si el ASSERT va a ser eliminado, checkear la llamada porque pageTable queda incorrecta //!Cuidado victim por copia. Deberia andar porque thread es puntero. No se si victim.vpn anda
+        DEBUG('p', "Luego de store\n");
+    }
+    //! Siempre que se quiera modificar los valores de addressInfo, si o si con coremap->addressInfo, o igualarlo a las modificaciones en victim.
     coremap->addressInfo[physical].vpn = vpn;
     coremap->addressInfo[physical].thread = currentThread;
 #endif
     // Ahora tenemos una pagina disponible en memoria. Hay que ver de donde se carga la información.
     if (pageTable[vpn].physicalPage == NOT_LOAD_ADDR) {
         // Nunca se cargo, (LoadFromCode)
+        DEBUG('p', "Leyendo de archivo");
+        // printf("Leyendo de archivo\n"); //TODO borrar esto
         LoadPageFromCode(vpn, physical); //TODO ver si es necesario un ASSERT
     }
 
     if (pageTable[vpn].physicalPage == ADDR_IN_SWAP) {
+        DEBUG('p', "Leyendo de SWAP");
+        // printf("Leyendo de SWAP\n"); //TODO borrar esto
         ASSERT(LoadPageFromSWAP(vpn, physical)); // Si el ASSERT va a ser eliminado, checkear la llamada porque pageTable queda incorrecta
     }
     usedPagesLock->Acquire();

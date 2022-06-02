@@ -26,9 +26,10 @@
 
 class AddressInfoEntry {
     public: 
-        int vpn;
-        Thread *thread;
+        int vpn = -1;
+        Thread *thread = nullptr;
         bool loading = false;
+        AddressInfoEntry() : vpn(-1), thread(nullptr), loading(false) {}
 };
 
 class Coremap {
