@@ -1,0 +1,31 @@
+¡¡¡ACLARACIÓN!!!
+
+Para el desarrollo esta plancha, asumimos que la flag SWAP solo se puede activar si DEMAND_LOADING se encuentra actividad, no es necesario la viceversa.
+Las estadísticas de TLB se encuentran con el resto de estadísticas que se muestran al terminar la ejecución.
+
+
+Ejercicio 2:
+
+Ejecutamos un programa suficientemente grande con distintos tamaños de TLB y obtuvimos los siguientes resultados:
+
+64
+TBL Totals: 46659839
+TBL Misses: 1776097
+TBL Hit ratio: 96.697609% 
+32
+TBL Totals: 46312178
+TBL Misses: 1529411
+TBL Hit ratio: 96.193520% 
+8
+TBL Totals: 46669733
+TBL Misses: 1782825
+TBL Hit ratio: 96.179916% 
+2
+TBL Totals: 64000043
+TBL Misses: 12528053
+TBL Hit ratio: 80.424934%
+
+En base a estos, encontramos que 8 es un tamaño aceptable.
+Esto es dado a la cantidad de lectoescrituras que se tienen por página, esta medida supera en gran medida a los 
+fallos de página. Por otro lado, si se quiere minimizar el costo de los cambios de estados cuanto menor sea la TLB es mejor.
+Si la decisión es entre 32 y 64, elegiríamos 32 ya que es suficiente (el mínimos de las 2 opciones). 
