@@ -37,7 +37,6 @@ static SynchConsole *synchConsole = nullptr;
 
 #include <stdio.h>
 
-//TODO poner
 #define RETURN(value) machine->WriteRegister(2, value);
 
 void InitSynchConsole() {
@@ -449,7 +448,7 @@ SyscallHandler(ExceptionType _et)
 
             userThreadsLock->Acquire();
             int pid = userThreads->Add(thread);
-            printf("PID: %d\n", pid);
+            DEBUG('t', "PID: %d\n", pid);
             if (pid == -1){
                 DEBUG('e', "Error: Too many processes.\n");
                 machine->WriteRegister(2, -1);

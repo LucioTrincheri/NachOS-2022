@@ -12,7 +12,6 @@
 
 #ifndef NACHOS_USERPROG_ADDRESSSPACE__HH
 #define NACHOS_USERPROG_ADDRESSSPACE__HH
-#define SWAP 1
 
 #include <algorithm>
 #include "filesys/file_system.hh"
@@ -77,9 +76,9 @@ private:
     int threadPid;
 
     int PickVictim();
+    void LoadPageFromCode(int vpn, int physical);
 #ifdef SWAP
     bool StorePageInSWAP(int vpn);
-    void LoadPageFromCode(int vpn, int physical);
     bool LoadPageFromSWAP(int vpn, int physical);
 #endif
 };
