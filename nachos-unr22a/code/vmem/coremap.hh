@@ -26,7 +26,7 @@
 
 class AddressInfoEntry {
     public: 
-        int vpn = -1;
+        unsigned vpn = 0;
         Thread *thread = nullptr;
         bool loading = false;
         AddressInfoEntry() : vpn(-1), thread(nullptr), loading(false) {}
@@ -43,14 +43,8 @@ public:
     /// Uninitialize a bitmap.
     ~Coremap();
 
-    /// Set the “nth” bit.
-    void Mark(unsigned which); //TODO no se usa probablemente, borrar
-
     /// Clear the “nth” bit.
     void Clear(unsigned which);
-
-    /// Is the “nth” bit set?
-    bool Test(unsigned which) const; //TODO no se usa probablemente, borrar
 
     /// Return the index of a clear bit, and as a side effect, set the bit.
     ///
