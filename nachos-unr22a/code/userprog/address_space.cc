@@ -258,33 +258,35 @@ AddressSpace::PickVictim()
     return *(pvFIFO->Pop());
 #else
     #ifdef PV_POLICY_CLOCK
-        while (coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].use || coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty){
-            // Valores: 3 -> use = true, dirty = true. 2 -> use = true, dirty = false. 1 -> use = false, dirty = true. El caso 0 sale del while.
-            int s = ((int) coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].use) * 2 + ((int) coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty);
-            switch(s) {
-                case 3:
-                    coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty = false;
-                    break;
-                case 2:
-                    coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].use = false;
-                    coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty = true;
-                    break;
-                case 1:
-                    coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty = false;
-                    break;
-                default:
-                    break;
+    int i = 0;
+    while (i < 2) {
+        // En la primera pasada, checkeamos por use = false y dirty = false
+        int paginasVisitadas = 0;
+        while (paginasVisitadas < NUM_PHYS_PAGES) {
+            if (!coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].use && !coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty) {
+                return pvClock;
             }
-            pvClock = (pvClock + 1) % NUM_PHYS_PAGES; 
+            pvClock = (pvClock + 1) % NUM_PHYS_PAGES;
+            paginasVisitadas++;
         }
-        return pvClock;
+        // En la segunda pasada, checkeamos por use = false y dirty = true. Si no lo cumple, seteamos use = false 
+        paginasVisitadas = 0;
+        while (paginasVisitadas < NUM_PHYS_PAGES) {
+            if (!coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].use && coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].dirty) {
+                return pvClock;
+            }
+            coremap->addressInfo[pvClock].thread->space->pageTable[coremap->addressInfo[pvClock].vpn].use = false;
+            pvClock = (pvClock + 1) % NUM_PHYS_PAGES;
+            paginasVisitadas++;
+        }
+        i++;
+        // Repetimos la primera y segunda pasada, pero ahora estamos seguros que use = false, por lo que se encontrara una pagina.
+    }
     #else
-        return std::rand() % NUM_PHYS_PAGES;
+    return std::rand() % NUM_PHYS_PAGES;
     #endif
 #endif
 }
-
-
 
 bool
 AddressSpace::StorePageInSWAP(int vpn)
@@ -440,9 +442,12 @@ void
 AddressSpace::RestoreState()
 {
     // Comentamos todo lo de la tabla de paginacion para que se pueda usar la TLB
-    // machine->GetMMU()->pageTable     = pageTable;
-    // machine->GetMMU()->pageTableSize = numPages;
+    #ifndef USE_TLB
+    machine->GetMMU()->pageTable     = pageTable;
+    machine->GetMMU()->pageTableSize = numPages;
+    #else
     for(unsigned int i=0; i<TLB_SIZE; i++) {
         machine->GetMMU()->tlb[i].valid = false;
     }
+    #endif
 }

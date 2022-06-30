@@ -130,6 +130,7 @@ FileSystem::FileSystem(bool format)
         freeMapFile   = new OpenFile(FREE_MAP_SECTOR);
         directoryFile = new OpenFile(DIRECTORY_SECTOR);
     }
+    Lock *freeMapLock = new Lock("freeMapLock");
 }
 
 FileSystem::~FileSystem()
@@ -163,6 +164,8 @@ FileSystem::~FileSystem()
 ///
 /// * `name` is the name of file to be created.
 /// * `initialSize` is the size of file to be created.
+
+
 bool
 FileSystem::Create(const char *name, unsigned initialSize)
 {
@@ -224,12 +227,15 @@ FileSystem::Open(const char *name)
     dir->FetchFrom(directoryFile);
     int sector = dir->Find(name);
     if (sector >= 0) {
-        openFile = new OpenFile(sector);  // `name` was found in directory.
+        bool toBeOpened = openFileList->AddOpenFile(sector);
+        if (toBeOpened){
+            openFile = new OpenFile(sector); // ! Todos los openfiles hay que renombrarlos para que incluyan nombre de archivo.
+        }
     }
     delete dir;
     return openFile;  // Return null if not found.
 }
-
+// TODO toBeRemoved en openFileList
 /// Delete a file from the file system.
 ///
 /// This requires:
@@ -247,30 +253,74 @@ FileSystem::Remove(const char *name)
 {
     ASSERT(name != nullptr);
 
+
     Directory *dir = new Directory(NUM_DIR_ENTRIES);
+    openFileList->Acquire();
     dir->FetchFrom(directoryFile);
     int sector = dir->Find(name);
     if (sector == -1) {
        delete dir;
        return false;  // file not found
     }
+    dir->Remove(name);
+    dir->WriteBack(directoryFile);
+    delete dir;
+    if(openFileList->SetToBeRemoved(sector)) {
+        openFileList->RemoveOpenFile(sector); // ? Podria ir en DeleteFromDisk, pero actualmente DeleteFromDisk es puramente de FileSystem y esta bueno mantener.
+        openFileList->Release();
+        return DeleteFromDisk(sector); // Esto solo sucede si el archivo no lo tiene nadie abierto durante el Remove
+    }
+    openFileList->Release();
+    return false;
+}
+
+// Dado un FileHeader, eliminamos el archivo al que corresponde
+bool
+FileSystem::DeleteFromDisk(int sector)
+{
     FileHeader *fileH = new FileHeader;
     fileH->FetchFrom(sector);
-
+    
     Bitmap *freeMap = new Bitmap(NUM_SECTORS);
+
+    // Lockeamos porque dos personas modifican freeMap al mismo tiempo
+    freeMapLock->Acquire();
     freeMap->FetchFrom(freeMapFile);
 
     fileH->Deallocate(freeMap);  // Remove data blocks.
     freeMap->Clear(sector);      // Remove header block.
-    dir->Remove(name);
 
     freeMap->WriteBack(freeMapFile);  // Flush to disk.
-    dir->WriteBack(directoryFile);    // Flush to disk.
+    freeMapLock->Release();
     delete fileH;
-    delete dir;
     delete freeMap;
     return true;
 }
+
+
+bool
+FileSystem::Close(int sector)
+{
+    openFileList->Acquire();
+    int instances = openFileList->CloseOpenFile(sector);
+    if (instances < 0) {
+        return false;
+    }
+    if (instances != 0) {
+        return true;
+    }
+    // Si toBeDestroyed es true, llamamos a DeleteFromDisk. En otro caso, no
+    if (!openFileList->GetToBeDestroyed(sector)) {
+        return true;
+    }
+
+    openFileList->RemoveOpenFile(sector);  // ? Podria ir en DeleteFromDisk, pero actualmente DeleteFromDisk es puramente de FileSystem y esta bueno mantener.
+
+    openFileList->Release();
+    return DeleteFromDisk(sector);
+}
+
+
 
 /// List all the files in the file system directory.
 void
