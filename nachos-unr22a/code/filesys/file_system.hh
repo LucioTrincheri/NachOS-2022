@@ -35,9 +35,8 @@
 #ifndef NACHOS_FILESYS_FILESYSTEM__HH
 #define NACHOS_FILESYS_FILESYSTEM__HH
 
-
 #include "open_file.hh"
-
+// ! Puede ser necesario lock
 
 #ifdef FILESYS_STUB  // Temporarily implement file system calls as calls to
                      // UNIX, until the real file system implementation is
@@ -94,6 +93,8 @@ public:
 
 #include "directory_entry.hh"
 #include "machine/disk.hh"
+#include "threads/lock.hh"
+#include "open_file_list.hh"
 
 
 /// Initial file sizes for the bitmap and directory; until the file system
@@ -144,7 +145,12 @@ private:
                             ///< file.
     OpenFile *directoryFile;  ///< “Root” directory -- list of file names,
                               ///< represented as a file.
+
     Lock *freeMapLock;
+
+    Lock *dirLock;
+
+    OpenFileList *openFileList;
 };
 
 #endif

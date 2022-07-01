@@ -197,3 +197,9 @@ OpenFile::Length() const
 {
     return hdr->FileLength();
 }
+
+int
+OpenFile::GetSector()
+{
+    return sct;
+}

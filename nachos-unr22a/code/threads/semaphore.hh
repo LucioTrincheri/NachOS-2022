@@ -20,8 +20,10 @@
 #define NACHOS_THREADS_SEMAPHORE__HH
 
 
-#include "thread.hh"
+//#include "thread.hh"
 #include "lib/list.hh"
+
+class Thread;
 
 
 /// This class defines a “semaphore”, which has a positive integer as its

@@ -370,7 +370,23 @@ SyscallHandler(ExceptionType _et)
                 break;
             }
             
+            OpenFile* openFile = currentThread->GetOpenFile(fid);
+
+            if (openFile == nullptr) {
+                DEBUG('e', "Error: File does not exist.\n");
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int sector = openFile->GetSector();
+
             if (currentThread->RemoveOpenFile(fid)) {
+                #ifdef FILESYS
+                if (!fileSystem->Close(sector)) {
+                    DEBUG('e', "Error: Could not close the file.\n");
+                    machine->WriteRegister(2, -1);
+                }
+                #endif 
                 machine->WriteRegister(2, 0);
             } else {
                 DEBUG('e', "Error: Could not close the file or file not open.\n");

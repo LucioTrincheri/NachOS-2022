@@ -1,11 +1,9 @@
 #ifndef NACHOS_FILESYS_OPENFILELIST__HH
 #define NACHOS_FILESYS_OPENFILELIST__HH
 
-#include "file_system.hh"
-#include "../threads/lock.hh"
+#include "threads/lock.hh"
 
-class ReaderWriter;
-class FileSystem;
+
 //class Lock; // ??????????????
 
 // Entrada de la linked_list OpenFileList
@@ -23,7 +21,7 @@ struct OpenFileListEntry{
 class OpenFileList {
 public:
 
-    OpenFileList(FileSystem *);
+    OpenFileList();
 
     ~OpenFileList();
 
@@ -32,6 +30,8 @@ public:
     int CloseOpenFile(int sector);
 
     bool SetToBeRemoved(int sector);
+
+    bool GetToBeRemoved(int sector);
 
     void Acquire();
 
@@ -42,15 +42,11 @@ private:
     // Lock
     Lock *listLock;
     
-    OpenFileListEntry *first;
-
-    FileSystem* myFileSystem;
-
+    OpenFileListEntry *first, *last;
     // Metodos
 
     OpenFileListEntry* FindOpenFile(int sector);
     OpenFileListEntry* CreateOpenFileEntry(int sector);
-
 
 
 };
