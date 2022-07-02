@@ -71,6 +71,7 @@ Copy(const char *from, const char *to)
     delete [] buffer;
 
     // Close the UNIX and the Nachos files.
+    fileSystem->Close(openFile->GetSector());
     delete openFile;
     fclose(fp);
 }

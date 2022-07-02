@@ -46,6 +46,7 @@
 #include "directory.hh"
 #include "file_header.hh"
 #include "lib/bitmap.hh"
+#include "threads/lock.hh"
 
 #include <stdio.h>
 #include <string.h>
@@ -175,12 +176,12 @@ bool
 FileSystem::Create(const char *name, unsigned initialSize)
 {
     ASSERT(name != nullptr);
-    ASSERT(initialSize < MAX_FILE_SIZE);
+    ASSERT(initialSize < MAX_FILE_SIZE_W_INDIR);
 
     DEBUG('f', "Creating file %s, size %u\n", name, initialSize);
 
     Directory *dir = new Directory(NUM_DIR_ENTRIES);
-    // ! Falta lock dir
+    dirLock->Acquire();
     dir->FetchFrom(directoryFile);
 
     bool success;
@@ -194,22 +195,25 @@ FileSystem::Create(const char *name, unsigned initialSize)
           // Find a sector to hold the file header.
         if (sector == -1) {
             success = false;  // No free block for file header.
-        } else if (!dir->Add(name, sector)) {
-            success = false;  // No space in directory.
         } else {
-            FileHeader *h = new FileHeader;
-            success = h->Allocate(freeMap, initialSize);
-              // Fails if no space on disk for data.
-            if (success) {
-                // Everything worked, flush all changes back to disk.
-                h->WriteBack(sector);
-                dir->WriteBack(directoryFile);
-                freeMap->WriteBack(freeMapFile);
+            if (!dir->Add(name, sector)) {
+            success = false;  // No space in directory.
+            } else {
+                FileHeader *h = new FileHeader;
+                success = h->Allocate(freeMap, initialSize);
+                // Fails if no space on disk for data.
+                if (success) {
+                    // Everything worked, flush all changes back to disk.
+                    h->WriteBack(sector);
+                    dir->WriteBack(directoryFile);
+                    freeMap->WriteBack(freeMapFile);
+                }
+                delete h;
             }
-            delete h;
         }
         delete freeMap;
     }
+    dirLock->Release();
     delete dir;
     return success;
 }
@@ -231,17 +235,22 @@ FileSystem::Open(const char *name)
     OpenFile  *openFile = nullptr;
 
     DEBUG('f', "Opening file %s\n", name);
+    dirLock->Acquire();
     dir->FetchFrom(directoryFile);
     int sector = dir->Find(name);
-    DEBUG('f', "Sector: %d\n", sector); // ! Lockear, ver si iniciar en create, cuidado entre remove y open
+    DEBUG('f', "Sector: %d\n", sector);
     if (sector >= 0) {
         DEBUG('f', "sector > 0\n");
+        openFileList->Acquire();
         bool toBeOpened = openFileList->AddOpenFile(sector);
+
         if (toBeOpened) {
             DEBUG('f', "sector > 0\n");
-            openFile = new OpenFile(sector);
+            openFile = new OpenFile(sector); // Esto busca en el sector, pero puede ser que no exista mas para abrir
         }
+        openFileList->Release();
     }
+    dirLock->Release();
     delete dir;
     return openFile;  // Return null if not found.
 }
@@ -276,13 +285,14 @@ FileSystem::Remove(const char *name)
     dir->WriteBack(directoryFile);
     dirLock->Release();
     delete dir;
-    // ! openFileList->Acquire();
+    openFileList->Acquire();
+    // Si SetToBeRemoved es falso, el archivo no existe o aun no es necesario eliminarlo (pero se setea para ser eleminado en el futuro).
     if(openFileList->SetToBeRemoved(sector)) {
         openFileList->RemoveOpenFile(sector);
-        // ! openFileList->Release();
+        openFileList->Release();
         return DeleteFromDisk(sector); // Esto solo sucede si el archivo no lo tiene nadie abierto durante el Remove
     }
-    // ! openFileList->Release();
+    openFileList->Release();
     return false;
 }
 
@@ -310,26 +320,31 @@ FileSystem::DeleteFromDisk(int sector)
     return true;
 }
 
-
 bool
 FileSystem::Close(int sector)
 {
-    // ! openFileList->Acquire();
+    DEBUG('f', "Closing file sector: %u \n", sector);
+    openFileList->Acquire();
     int instances = openFileList->CloseOpenFile(sector);
+    bool toBeRemoved = openFileList->GetToBeRemoved(sector);
+    openFileList->Release();
+    // Si la cantidad de instancias es menor a 0, el archivo no existe al momento de cerrarlo.
     if (instances < 0) {
         return false;
     }
     if (instances != 0) {
         return true;
     }
-    // Si toBeDestroyed es true, llamamos a DeleteFromDisk. En otro caso, retornamos true.
-    if (!openFileList->GetToBeRemoved(sector)) {
+    // Si toBeRemoved es false, retornamos que el archivo fue cerrado correctamente.
+    if (!toBeRemoved) {
         return true;
     }
 
+    // Si toBeRemoved es true, se remueve de la lista de procesos abiertos y se borra del disco.
+    openFileList->Acquire();
     openFileList->RemoveOpenFile(sector);
+    openFileList->Release();
 
-    // ! openFileList->Release();
     return DeleteFromDisk(sector);
 }
 
@@ -557,3 +572,4 @@ FileSystem::Print()
     delete freeMap;
     delete dir;
 }
+

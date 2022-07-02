@@ -1,10 +1,7 @@
 #ifndef NACHOS_FILESYS_OPENFILELIST__HH
 #define NACHOS_FILESYS_OPENFILELIST__HH
 
-#include "threads/lock.hh"
-
-
-//class Lock; // ??????????????
+class Lock;
 
 // Entrada de la linked_list OpenFileList
 struct OpenFileListEntry{
@@ -38,6 +35,11 @@ public:
     void Release();
 
     void RemoveOpenFile(int sector);
+
+    void PrintList();
+
+    void Print(OpenFileListEntry * sector);
+
 private:
     // Lock
     Lock *listLock;
@@ -45,10 +47,9 @@ private:
     OpenFileListEntry *first, *last;
     // Metodos
 
-    OpenFileListEntry* FindOpenFile(int sector);
     OpenFileListEntry* CreateOpenFileEntry(int sector);
 
-
+    OpenFileListEntry* FindOpenFile(int sector);
 };
 
 

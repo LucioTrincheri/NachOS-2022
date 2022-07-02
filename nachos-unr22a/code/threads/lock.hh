@@ -18,7 +18,7 @@
 #define NACHOS_THREADS_LOCK__HH
 
 #include "semaphore.hh"
-
+//! Aca no faltaria #include "thread.hh"???
 
 /// This class defines a “lock”.
 ///

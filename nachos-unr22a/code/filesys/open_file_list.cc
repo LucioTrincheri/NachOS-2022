@@ -1,9 +1,8 @@
 #include "open_file_list.hh"
-//#include "threads/lock.hh"
+#include "threads/lock.hh"
 
 #include <stdio.h>
 #include <string.h>
-
 
 OpenFileList::OpenFileList()
 {
@@ -27,23 +26,19 @@ OpenFileList::~OpenFileList()
 bool
 OpenFileList::AddOpenFile(int sector)
 {
-    listLock->Acquire();
     OpenFileListEntry *entry = FindOpenFile(sector);
-    if (entry != nullptr){
+    if (entry != nullptr) {
+        DEBUG('f', "Abro entry en AddOpenFile\n");
         entry->openInstances++;
-        listLock->Release();
-        return true;
-    }
-
-    entry = CreateOpenFileEntry(sector);
-    if (first == nullptr) {
-        first = last = entry;
     } else {
-        last->next = entry;
-        last = entry;
+        entry = CreateOpenFileEntry(sector);
+        if (first == nullptr) {
+            first = last = entry;
+        } else {
+            last->next = entry;
+            last = entry;
+        }
     }
-
-    listLock->Release();
     return true;
 }
 
@@ -116,6 +111,7 @@ OpenFileList::RemoveOpenFile(int sector)
     return;
 }
 
+
 void
 OpenFileList::Acquire()
 {
@@ -128,14 +124,7 @@ OpenFileList::Release()
     listLock->Release();
 }
 
-OpenFileListEntry*
-OpenFileList::FindOpenFile(int sector)
-{
-    OpenFileListEntry *aux;
-    for (aux = first; aux != nullptr && aux->sector != sector; aux = aux->next);
-    return aux;
-}
-
+// Esta funcion se llama por create y solo se invoca si el archivo (sector) no existe.
 OpenFileListEntry*
 OpenFileList::CreateOpenFileEntry(int sector)
 {
@@ -145,5 +134,36 @@ OpenFileList::CreateOpenFileEntry(int sector)
 	entry->toBeRemoved = false;
     entry->next = nullptr;
 
-	return entry;
+    return entry;
+}
+
+OpenFileListEntry*
+OpenFileList::FindOpenFile(int sector)
+{
+    OpenFileListEntry *aux;
+    for (aux = first; aux != nullptr && aux->sector != sector; aux = aux->next);
+    return aux;
+}
+
+void
+OpenFileList::PrintList()
+{
+    OpenFileListEntry *aux;
+    for (aux = first; aux != nullptr; aux = aux->next) {
+        Print(aux);
+    }
+}
+
+void
+OpenFileList::Print(OpenFileListEntry *toPrint)
+{
+    printf("--------------------------------\n");
+    printf("%u\n",toPrint->sector);
+    printf("%u\n",toPrint->openInstances);
+    printf("%u\n",toPrint->toBeRemoved);
+    if(toPrint->next == nullptr){
+        printf("nullptr\n",toPrint->next);
+    } else {
+        printf("%d\n",toPrint->next);
+    }
 }

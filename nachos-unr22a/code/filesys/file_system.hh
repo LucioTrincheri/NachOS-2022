@@ -36,7 +36,6 @@
 #define NACHOS_FILESYS_FILESYSTEM__HH
 
 #include "open_file.hh"
-// ! Puede ser necesario lock
 
 #ifdef FILESYS_STUB  // Temporarily implement file system calls as calls to
                      // UNIX, until the real file system implementation is
@@ -93,15 +92,15 @@ public:
 
 #include "directory_entry.hh"
 #include "machine/disk.hh"
-#include "threads/lock.hh"
 #include "open_file_list.hh"
 
+class Lock;
 
 /// Initial file sizes for the bitmap and directory; until the file system
 /// supports extensible files, the directory size sets the maximum number of
 /// files that can be loaded onto the disk.
 static const unsigned FREE_MAP_FILE_SIZE = NUM_SECTORS / BITS_IN_BYTE;
-static const unsigned NUM_DIR_ENTRIES = 10;
+static const unsigned NUM_DIR_ENTRIES = 1000;
 static const unsigned DIRECTORY_FILE_SIZE
   = sizeof (DirectoryEntry) * NUM_DIR_ENTRIES;
 
