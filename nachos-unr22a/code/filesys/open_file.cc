@@ -14,6 +14,7 @@
 #include "open_file.hh"
 #include "file_header.hh"
 #include "threads/system.hh"
+#include "threads/lock.hh"
 
 #include <string.h>
 
@@ -22,12 +23,14 @@
 /// memory while the file is open.
 ///
 /// * `sector` is the location on disk of the file header for this file.
-OpenFile::OpenFile(int sector)
+OpenFile::OpenFile(int sector, Lock* writeLock)
 {
     sct = sector;
     hdr = new FileHeader;
     hdr->FetchFrom(sector);
     seekPosition = 0;
+    fileWriteLock = writeLock;
+    //fileWriteLock = fileSystem->openFileList->FindOpenFile(sector)->writeLock;'//! Hacerla privada otra vez
 }
 
 /// Close a Nachos file, de-allocating any in-memory data structures.
@@ -147,16 +150,24 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
     ASSERT(from != nullptr);
     ASSERT(numBytes > 0);
 
+    if (fileWriteLock != nullptr) {
+        fileWriteLock->Acquire();
+    } 
+
     unsigned fileLength = hdr->FileLength();
     unsigned firstSector, lastSector, numSectors;
     bool firstAligned, lastAligned;
     char *buf;
 
     if (position >= fileLength) {
+        if (fileWriteLock != nullptr) {
+            fileWriteLock->Release();
+        }
+
         return 0;  // Check request.
     }
     if (position + numBytes > fileLength) {
-        numBytes = fileLength - position;
+        numBytes = fileLength - position; //! Aca hay que hacer expansion
     }
     DEBUG('f', "Writing %u bytes at %u, from file of length %u.\n",
           numBytes, position, fileLength);
@@ -187,6 +198,11 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
         synchDisk->WriteSector(hdr->ByteToSector(i * SECTOR_SIZE),
                                &buf[(i - firstSector) * SECTOR_SIZE]);
     }
+
+    if (fileWriteLock != nullptr) {
+        fileWriteLock->Release();
+    }
+
     delete [] buf;
     return numBytes;
 }

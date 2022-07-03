@@ -104,8 +104,8 @@ FileSystem::FileSystem(bool format)
         // The file system operations assume these two files are left open
         // while Nachos is running.
 
-        freeMapFile   = new OpenFile(FREE_MAP_SECTOR);
-        directoryFile = new OpenFile(DIRECTORY_SECTOR);
+        freeMapFile   = new OpenFile(FREE_MAP_SECTOR, nullptr);
+        directoryFile = new OpenFile(DIRECTORY_SECTOR, nullptr);
 
         // Once we have the files “open”, we can write the initial version of
         // each file back to disk.  The directory at this point is completely
@@ -130,8 +130,8 @@ FileSystem::FileSystem(bool format)
         // If we are not formatting the disk, just open the files
         // representing the bitmap and directory; these are left open while
         // Nachos is running.
-        freeMapFile   = new OpenFile(FREE_MAP_SECTOR);
-        directoryFile = new OpenFile(DIRECTORY_SECTOR);
+        freeMapFile   = new OpenFile(FREE_MAP_SECTOR, nullptr);
+        directoryFile = new OpenFile(DIRECTORY_SECTOR, nullptr);
     }
     openFileList = new OpenFileList();
     freeMapLock = new Lock("freeMapLock");
@@ -242,11 +242,11 @@ FileSystem::Open(const char *name)
     if (sector >= 0) {
         DEBUG('f', "sector > 0\n");
         openFileList->Acquire();
-        bool toBeOpened = openFileList->AddOpenFile(sector);
+        Lock* writeLock = openFileList->AddOpenFile(sector);
 
-        if (toBeOpened) {
+        if (writeLock != nullptr) {
             DEBUG('f', "sector > 0\n");
-            openFile = new OpenFile(sector); // Esto busca en el sector, pero puede ser que no exista mas para abrir
+            openFile = new OpenFile(sector, writeLock); // Esto busca en el sector, pero puede ser que no exista mas para abrir
         }
         openFileList->Release();
     }

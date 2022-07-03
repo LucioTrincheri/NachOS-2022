@@ -139,6 +139,8 @@ public:
 
     bool DeleteFromDisk(int sector);
 
+    OpenFileList *openFileList;
+
 private:
     OpenFile *freeMapFile;  ///< Bit map of free disk blocks, represented as a
                             ///< file.
@@ -148,8 +150,6 @@ private:
     Lock *freeMapLock;
 
     Lock *dirLock;
-
-    OpenFileList *openFileList;
 };
 
 #endif

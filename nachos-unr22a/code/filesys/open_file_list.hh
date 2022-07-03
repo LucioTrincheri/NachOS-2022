@@ -12,6 +12,8 @@ struct OpenFileListEntry{
     // True iff Remove has been called on the file
     bool toBeRemoved;
 
+    Lock *writeLock;
+
     OpenFileListEntry *next;
 };
 
@@ -22,7 +24,7 @@ public:
 
     ~OpenFileList();
 
-    bool AddOpenFile(int sector);
+    Lock* AddOpenFile(int sector);
 
     int CloseOpenFile(int sector);
 
@@ -40,6 +42,7 @@ public:
 
     void Print(OpenFileListEntry * sector);
 
+    OpenFileListEntry* FindOpenFile(int sector);
 private:
     // Lock
     Lock *listLock;
@@ -49,7 +52,6 @@ private:
 
     OpenFileListEntry* CreateOpenFileEntry(int sector);
 
-    OpenFileListEntry* FindOpenFile(int sector);
 };
 
 

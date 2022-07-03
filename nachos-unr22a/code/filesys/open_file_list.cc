@@ -16,6 +16,7 @@ OpenFileList::~OpenFileList()
 
     while(first != nullptr){
   		aux = first->next;
+        delete first->writeLock;
   		delete first;
   		first = aux;
 	}
@@ -23,7 +24,7 @@ OpenFileList::~OpenFileList()
     delete listLock;
 }
 
-bool
+Lock *
 OpenFileList::AddOpenFile(int sector)
 {
     OpenFileListEntry *entry = FindOpenFile(sector);
@@ -39,14 +40,14 @@ OpenFileList::AddOpenFile(int sector)
             last = entry;
         }
     }
-    return true;
+    return entry->writeLock;
 }
 
 int
 OpenFileList::CloseOpenFile(int sector)
 {
     OpenFileListEntry *entry = FindOpenFile(sector);
-    if (entry != nullptr){
+    if (entry != nullptr) {
         entry->openInstances--;
         return entry->openInstances;
     }
@@ -91,6 +92,7 @@ OpenFileList::RemoveOpenFile(int sector)
     // Si la lista tiene un unico elemento, se elemina y se reasigna first y last
     if (first == last){
         first = last = nullptr;
+        delete aux->writeLock;
         delete aux;
         return;
     }
@@ -98,6 +100,7 @@ OpenFileList::RemoveOpenFile(int sector)
     // Casos de primer elemento, ultimo elemento y elemento en el medio.
     if (aux == first) {
         first = first->next;
+        delete aux->writeLock;
         delete aux;
         return;
     }
@@ -107,10 +110,18 @@ OpenFileList::RemoveOpenFile(int sector)
     }
 
     prev->next = aux->next;
+    delete aux->writeLock;
     delete aux;
     return;
 }
 
+OpenFileListEntry*
+OpenFileList::FindOpenFile(int sector)
+{
+    OpenFileListEntry *aux;
+    for (aux = first; aux != nullptr && aux->sector != sector; aux = aux->next);
+    return aux;
+}
 
 void
 OpenFileList::Acquire()
@@ -124,6 +135,8 @@ OpenFileList::Release()
     listLock->Release();
 }
 
+
+// Privados ------------------
 // Esta funcion se llama por create y solo se invoca si el archivo (sector) no existe.
 OpenFileListEntry*
 OpenFileList::CreateOpenFileEntry(int sector)
@@ -132,18 +145,12 @@ OpenFileList::CreateOpenFileEntry(int sector)
 	entry->sector = sector;
 	entry->openInstances = 1;
 	entry->toBeRemoved = false;
+    entry->writeLock = new Lock("writeLock");
     entry->next = nullptr;
 
     return entry;
 }
 
-OpenFileListEntry*
-OpenFileList::FindOpenFile(int sector)
-{
-    OpenFileListEntry *aux;
-    for (aux = first; aux != nullptr && aux->sector != sector; aux = aux->next);
-    return aux;
-}
 
 void
 OpenFileList::PrintList()

@@ -64,12 +64,12 @@ FileHeader::Allocate(Bitmap *freeMap, unsigned fileSize)
     // En este caso raw.numBytes = dataSectorCount <= y no hay indirección.
     if(raw.numBytes <= MAX_FILE_SIZE){
         for (unsigned i = 0; i < raw.numSectors; i++)
-            raw.dataSectors[i] = freeMap -> Find();
+            raw.dataSectors[i] = freeMap->Find();
     // En este caso raw.numBytes = dataSectorCount + indirectionSectorCount, por lo que hacemos indirección.
+    indirTable = std::vector<FileHeader*>(indirectionSectorCount);
     }else{
         // Amount of bytes that still have to be allocated.
         unsigned remainingBytes = raw.numBytes;
-        indirTable = std::vector<FileHeader*>(indirectionSectorCount); // ? Ver si usar vectores. Puede ocasionar problemas al no existir en WriteBack si se declara aca.
 
         // Allocate the header tables.
         for(unsigned i = 0; i < indirectionSectorCount; i++){
@@ -105,7 +105,7 @@ FileHeader::Deallocate(Bitmap *freeMap)
     ASSERT(freeMap != nullptr);
 
     // Por cada FileHeader en la tabla de indirección, llamo a Deallocate otra vez.
-    for(FileHeader* fh : indirTable){ //? Otra vez, ver si usar vectores o no
+    for(FileHeader* fh : indirTable){
         fh->Deallocate(freeMap);
         delete fh;
     }
@@ -114,9 +114,9 @@ FileHeader::Deallocate(Bitmap *freeMap)
     // Borro los sectores que pertenezcan a este nivel de indirección.
     unsigned sectorLimit;
     if(raw.numBytes > MAX_FILE_SIZE)
-        sectorLimit = (raw.numBytes <= MAX_FILE_SIZE) ? 0 : DivRoundUp(DivRoundUp(raw.numBytes, SECTOR_SIZE), NUM_DIRECT); // ? En este caso, no deberia ser necesario limpiar.
+        sectorLimit = (raw.numBytes <= MAX_FILE_SIZE) ? 0 : DivRoundUp(DivRoundUp(raw.numBytes, SECTOR_SIZE), NUM_DIRECT); //? Ver como hacer con lo de los DivRoundUp
     else
-        sectorLimit = raw.numSectors; // ! el de arriba se deberia poder hacer restando NUM_DIRECT a raw.numSector
+        sectorLimit = raw.numSectors;
 
     for (unsigned i = 0; i < sectorLimit; i++) {
             ASSERT(freeMap->Test(raw.dataSectors[i]));
@@ -140,7 +140,7 @@ FileHeader::FetchFrom(unsigned sector)
     for(unsigned i = 0; i < indirectionSectorCount; i++){
         FileHeader* dataHeader = new FileHeader;
         dataHeader->FetchFrom(raw.dataSectors[i]);
-        indirTable[i] = dataHeader; // ? No se puede hacer lo mismo que la linea 161 de WriteBack??
+        indirTable[i] = dataHeader;
     }
 }
 
@@ -154,9 +154,10 @@ FileHeader::WriteBack(unsigned sector)
     synchDisk->WriteSector(sector, (char *) &raw);
 
     // Guardo todo los FileHeaders del siguiente nivel de indirección.
-    for(unsigned i = 0; i < indirTable.size(); i++) // ! Puede no existir size por como fue creado indirTable en Allocate.
+    for(unsigned i = 0; i < indirTable.size(); i++)
         indirTable[i]->WriteBack(raw.dataSectors[i]);
 }
+
 
 
 /// Return which disk sector is storing a particular byte within the file.
