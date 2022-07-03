@@ -1,5 +1,6 @@
 #include "open_file_list.hh"
 #include "threads/lock.hh"
+#include "file_access_controller.hh"
 
 #include <stdio.h>
 #include <string.h>
@@ -16,7 +17,7 @@ OpenFileList::~OpenFileList()
 
     while(first != nullptr){
   		aux = first->next;
-        delete first->writeLock;
+        delete first->accessController;
   		delete first;
   		first = aux;
 	}
@@ -24,7 +25,7 @@ OpenFileList::~OpenFileList()
     delete listLock;
 }
 
-Lock *
+FileAccessController *
 OpenFileList::AddOpenFile(int sector)
 {
     OpenFileListEntry *entry = FindOpenFile(sector);
@@ -40,7 +41,7 @@ OpenFileList::AddOpenFile(int sector)
             last = entry;
         }
     }
-    return entry->writeLock;
+    return entry->accessController;
 }
 
 int
@@ -92,7 +93,7 @@ OpenFileList::RemoveOpenFile(int sector)
     // Si la lista tiene un unico elemento, se elemina y se reasigna first y last
     if (first == last){
         first = last = nullptr;
-        delete aux->writeLock;
+        delete aux->accessController;
         delete aux;
         return;
     }
@@ -100,7 +101,7 @@ OpenFileList::RemoveOpenFile(int sector)
     // Casos de primer elemento, ultimo elemento y elemento en el medio.
     if (aux == first) {
         first = first->next;
-        delete aux->writeLock;
+        delete aux->accessController;
         delete aux;
         return;
     }
@@ -110,7 +111,7 @@ OpenFileList::RemoveOpenFile(int sector)
     }
 
     prev->next = aux->next;
-    delete aux->writeLock;
+    delete aux->accessController;
     delete aux;
     return;
 }
@@ -145,7 +146,7 @@ OpenFileList::CreateOpenFileEntry(int sector)
 	entry->sector = sector;
 	entry->openInstances = 1;
 	entry->toBeRemoved = false;
-    entry->writeLock = new Lock("writeLock");
+    entry->accessController = new FileAccessController();
     entry->next = nullptr;
 
     return entry;
@@ -165,12 +166,12 @@ void
 OpenFileList::Print(OpenFileListEntry *toPrint)
 {
     printf("--------------------------------\n");
-    printf("%u\n",toPrint->sector);
-    printf("%u\n",toPrint->openInstances);
-    printf("%u\n",toPrint->toBeRemoved);
+    printf("Sector fh: %u\n",toPrint->sector);
+    printf("Cantidad de instancias abiertas: %u\n",toPrint->openInstances);
+    printf("A ser removido: %u\n",toPrint->toBeRemoved);
     if(toPrint->next == nullptr){
-        printf("nullptr\n",toPrint->next);
+        printf("nullptr\n");
     } else {
-        printf("%d\n",toPrint->next);
+        printf("%p\n",(void *)toPrint->next);
     }
 }

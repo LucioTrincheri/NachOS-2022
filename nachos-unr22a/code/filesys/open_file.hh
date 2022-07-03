@@ -22,7 +22,7 @@
 
 #include "lib/utility.hh"
 
-class Lock;
+class FileAccessController;
 
 #ifdef FILESYS_STUB  // Temporarily implement calls to Nachos file system as
                      // calls to UNIX!  See definitions listed under `#else`.
@@ -94,7 +94,7 @@ class OpenFile {
 public:
 
     /// Open a file whose header is located at `sector` on the disk.
-    OpenFile(int sector, Lock* writeLock);
+    OpenFile(int sector, FileAccessController* accessController);
 
     /// Close the file.
     ~OpenFile();
@@ -127,7 +127,7 @@ public:
 
     unsigned seekPosition;  ///< Current position within the file.
 
-    Lock *fileWriteLock;
+    FileAccessController *fileAccessController;
 };
 
 #endif

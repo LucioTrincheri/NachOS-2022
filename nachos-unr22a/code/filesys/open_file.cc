@@ -14,7 +14,7 @@
 #include "open_file.hh"
 #include "file_header.hh"
 #include "threads/system.hh"
-#include "threads/lock.hh"
+#include "file_access_controller.hh"
 
 #include <string.h>
 
@@ -23,14 +23,13 @@
 /// memory while the file is open.
 ///
 /// * `sector` is the location on disk of the file header for this file.
-OpenFile::OpenFile(int sector, Lock* writeLock)
+OpenFile::OpenFile(int sector, FileAccessController* accessController)
 {
     sct = sector;
     hdr = new FileHeader;
     hdr->FetchFrom(sector);
     seekPosition = 0;
-    fileWriteLock = writeLock;
-    //fileWriteLock = fileSystem->openFileList->FindOpenFile(sector)->writeLock;'//! Hacerla privada otra vez
+    fileAccessController = accessController;
 }
 
 /// Close a Nachos file, de-allocating any in-memory data structures.
@@ -114,11 +113,18 @@ OpenFile::ReadAt(char *into, unsigned numBytes, unsigned position)
     ASSERT(into != nullptr);
     ASSERT(numBytes > 0);
 
+    if (fileAccessController != nullptr) {
+        fileAccessController->AcquireRead();
+    }
+
     unsigned fileLength = hdr->FileLength();
     unsigned firstSector, lastSector, numSectors;
     char *buf;
 
     if (position >= fileLength) {
+        if (fileAccessController != nullptr) {
+            fileAccessController->ReleaseRead();
+        } 
         return 0;  // Check request.
     }
     if (position + numBytes > fileLength) {
@@ -140,6 +146,10 @@ OpenFile::ReadAt(char *into, unsigned numBytes, unsigned position)
 
     // Copy the part we want.
     memcpy(into, &buf[position - firstSector * SECTOR_SIZE], numBytes);
+
+    if (fileAccessController != nullptr) {
+        fileAccessController->ReleaseRead();
+    } 
     delete [] buf;
     return numBytes;
 }
@@ -150,8 +160,8 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
     ASSERT(from != nullptr);
     ASSERT(numBytes > 0);
 
-    if (fileWriteLock != nullptr) {
-        fileWriteLock->Acquire();
+    if (fileAccessController != nullptr) {
+        fileAccessController->AcquireWrite();
     } 
 
     unsigned fileLength = hdr->FileLength();
@@ -160,15 +170,45 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
     char *buf;
 
     if (position >= fileLength) {
-        if (fileWriteLock != nullptr) {
-            fileWriteLock->Release();
+        if (fileAccessController != nullptr) {
+            fileAccessController->ReleaseWrite();
         }
 
         return 0;  // Check request.
     }
-    if (position + numBytes > fileLength) {
-        numBytes = fileLength - position; //! Aca hay que hacer expansion
+
+    // Extend the file to fit the write operation size requirement.
+    if (position + numBytes > fileLength){
+        unsigned extendSize = position + numBytes - fileLength;
+
+        // Fetch the bitmap containing the free disk sectors.
+        Bitmap *freeMap;
+
+        // If the file is special, exclusive access is already guaranteed.
+        if(fileAccessController == nullptr)
+            freeMap = fileSystem->GetCurrentFreeMap();
+        else
+            freeMap = fileSystem->AcquireFreeMap();
+
+        if (!hdr->Extend(freeMap, extendSize)){
+            if(fileAccessController != nullptr){
+                fileAccessController->ReleaseWrite();
+                fileSystem->ReleaseFreeMap(freeMap);
+            }
+            return 0;
+        }
+
+        fileLength = hdr->FileLength();
+
+        // Write back the changes to disk.
+        hdr->WriteBack(sct);
+
+        // If exclusive freeMap access was requested in this function,
+        // it is revoked here.
+        if(fileAccessController != nullptr)
+            fileSystem -> ReleaseFreeMap(freeMap);
     }
+
     DEBUG('f', "Writing %u bytes at %u, from file of length %u.\n",
           numBytes, position, fileLength);
 
@@ -199,8 +239,8 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
                                &buf[(i - firstSector) * SECTOR_SIZE]);
     }
 
-    if (fileWriteLock != nullptr) {
-        fileWriteLock->Release();
+    if (fileAccessController != nullptr) {
+        fileAccessController->ReleaseWrite();
     }
 
     delete [] buf;

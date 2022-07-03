@@ -93,6 +93,7 @@ public:
 #include "directory_entry.hh"
 #include "machine/disk.hh"
 #include "open_file_list.hh"
+#include "lib/bitmap.hh"
 
 class Lock;
 
@@ -100,7 +101,7 @@ class Lock;
 /// supports extensible files, the directory size sets the maximum number of
 /// files that can be loaded onto the disk.
 static const unsigned FREE_MAP_FILE_SIZE = NUM_SECTORS / BITS_IN_BYTE;
-static const unsigned NUM_DIR_ENTRIES = 1000;
+static const unsigned NUM_DIR_ENTRIES = 10;
 static const unsigned DIRECTORY_FILE_SIZE
   = sizeof (DirectoryEntry) * NUM_DIR_ENTRIES;
 
@@ -140,6 +141,12 @@ public:
     bool DeleteFromDisk(int sector);
 
     OpenFileList *openFileList;
+
+    Bitmap *AcquireFreeMap();
+
+    Bitmap *GetCurrentFreeMap();
+
+    void ReleaseFreeMap(Bitmap *freeMap_);
 
 private:
     OpenFile *freeMapFile;  ///< Bit map of free disk blocks, represented as a

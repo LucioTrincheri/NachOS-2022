@@ -1,7 +1,8 @@
 #ifndef NACHOS_FILESYS_OPENFILELIST__HH
 #define NACHOS_FILESYS_OPENFILELIST__HH
 
-class Lock;
+class Lock; //! Cambio agrego fileAccess
+class FileAccessController;
 
 // Entrada de la linked_list OpenFileList
 struct OpenFileListEntry{
@@ -12,7 +13,7 @@ struct OpenFileListEntry{
     // True iff Remove has been called on the file
     bool toBeRemoved;
 
-    Lock *writeLock;
+    FileAccessController *accessController;
 
     OpenFileListEntry *next;
 };
@@ -24,7 +25,7 @@ public:
 
     ~OpenFileList();
 
-    Lock* AddOpenFile(int sector);
+    FileAccessController* AddOpenFile(int sector);
 
     int CloseOpenFile(int sector);
 

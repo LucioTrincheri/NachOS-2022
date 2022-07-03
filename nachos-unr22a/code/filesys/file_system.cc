@@ -47,6 +47,7 @@
 #include "file_header.hh"
 #include "lib/bitmap.hh"
 #include "threads/lock.hh"
+#include "file_access_controller.hh"
 
 #include <stdio.h>
 #include <string.h>
@@ -242,11 +243,11 @@ FileSystem::Open(const char *name)
     if (sector >= 0) {
         DEBUG('f', "sector > 0\n");
         openFileList->Acquire();
-        Lock* writeLock = openFileList->AddOpenFile(sector);
+        FileAccessController* accessController = openFileList->AddOpenFile(sector);
 
-        if (writeLock != nullptr) {
+        if (accessController != nullptr) {
             DEBUG('f', "sector > 0\n");
-            openFile = new OpenFile(sector, writeLock); // Esto busca en el sector, pero puede ser que no exista mas para abrir
+            openFile = new OpenFile(sector, accessController); // Esto busca en el sector, pero puede ser que no exista mas para abrir
         }
         openFileList->Release();
     }
@@ -573,3 +574,33 @@ FileSystem::Print()
     delete dir;
 }
 
+Bitmap *
+FileSystem::AcquireFreeMap()
+{
+    freeMapLock->Acquire();
+
+    Bitmap *freeMap = new Bitmap(NUM_SECTORS);
+    freeMap->FetchFrom(freeMapFile);
+
+    return freeMap;
+}
+
+Bitmap*
+FileSystem::GetCurrentFreeMap()
+{
+    Bitmap *freeMap = new Bitmap(NUM_SECTORS);
+    freeMap->FetchFrom(freeMapFile);
+
+    return freeMap;
+}
+
+/// Marks the end of the freeMap usage. The lock is released, the
+/// memory is freed and the changes are saved to disk.
+void
+FileSystem::ReleaseFreeMap(Bitmap *freeMap_)
+{
+    freeMap_->WriteBack(freeMapFile);
+    delete freeMap_;
+
+    freeMapLock -> Release();
+}

@@ -221,8 +221,119 @@ FileHeader::Print(const char *title)
     delete [] data;
 }
 
-const RawFileHeader *
-FileHeader::GetRaw() const
+RawFileHeader *
+FileHeader::GetRaw()
 {
     return &raw;
+}
+
+void
+FileHeader::SetRaw(RawFileHeader nRaw) {
+    raw = nRaw;
+    indirTable = std::vector<FileHeader*>(0);
+
+}
+
+
+int min (int a, int b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+bool
+FileHeader::Extend(Bitmap *freeMap, unsigned extendSize){
+    if(extendSize == 0){
+        return true;
+    }
+    // Variables viejas
+    unsigned oldNumBytes = raw.numBytes;
+    unsigned oldNumSectors = raw.numSectors;
+
+    // Nuevas variables
+    raw.numBytes += extendSize;
+
+    // Cantidad de sectores de data
+    unsigned dataSectorCount = DivRoundUp(raw.numBytes, SECTOR_SIZE);
+    // Cantidad de sectores dedicados a indirección. El maximo es la cantidad de sectores que se pueden direccionar desde un header (NUM_DIRECT).
+    unsigned indirectionSectorCount = (raw.numBytes <= MAX_FILE_SIZE) ? 0 : DivRoundUp(dataSectorCount, NUM_DIRECT);
+    // raw.numSectors mayor a NUM_DIRECT si hay indireccion.
+    raw.numSectors = dataSectorCount + indirectionSectorCount;
+
+	// Si no hay suficiente sectores o el tamaño del archivo es mayor al tamaño máximo con indirección.
+    if (freeMap->CountClear() < raw.numSectors - oldNumSectors or MAX_FILE_SIZE_W_INDIR < raw.numBytes){
+        raw.numBytes = oldNumBytes;
+        raw.numSectors = oldNumSectors;
+        return false;  // Not enough space.
+    }
+
+    unsigned remainingBytes = extendSize;
+    // No habia indireccion anteriormente
+    if (oldNumBytes <= MAX_FILE_SIZE) {
+        // Aun entra en el fileHeader actual
+        if (raw.numBytes <= MAX_FILE_SIZE) {
+            for (unsigned i = oldNumSectors; i < raw.numSectors; i++) {
+                raw.dataSectors[i] = freeMap->Find();
+            }
+        // Si no entra en el FileHeader actual, hay que hacer indirección.
+        } else {
+            unsigned freeBytesOfLastSector = SECTOR_SIZE - (oldNumBytes % SECTOR_SIZE);
+            remainingBytes -= freeBytesOfLastSector;
+            for (unsigned i = oldNumSectors; i < NUM_DIRECT; i++){
+                raw.dataSectors[i] = freeMap->Find();
+                remainingBytes -= SECTOR_SIZE;
+            }
+            // El header actual esta lleno, pero faltan bytes. Hay que crear un nuevo header igual al actual, vaciar el actual y usarlo como FileHeader de indireccion.
+            // Nuevo FileHeader copia
+            FileHeader *fh = new FileHeader;
+            // Copio los contenidos del actual a la copia y coloco los valores correctos.
+            fh->SetRaw(raw);
+            RawFileHeader* rfh = fh->GetRaw();
+            rfh->numBytes = MAX_FILE_SIZE;
+            rfh->numSectors = NUM_DIRECT;
+            // Actualizo los valores del FileHeader para que actue como indireccion.
+            raw.dataSectors[0] = freeMap->Find();
+            indirTable[0] = fh;
+        }
+    }
+
+    // Ahora, con indirección se expande para poder almacenar la cantidad de bytes restante.
+    if (remainingBytes > 0) {
+        FileHeader *fh = indirTable[indirTable.size() - 1];
+        RawFileHeader *rfh = fh->GetRaw();
+
+        unsigned freeBytesInLastTable = MAX_FILE_SIZE - rfh->numBytes;
+
+        if (freeBytesInLastTable != 0) {
+            fh->Extend(freeMap, std::min(remainingBytes, freeBytesInLastTable));
+        }
+
+        remainingBytes -= freeBytesInLastTable;
+
+        if (remainingBytes > 0) {
+            for (unsigned i = indirTable.size(); i < indirectionSectorCount; i++){
+                raw.dataSectors[i] = freeMap->Find();
+                FileHeader *dataHeader = new FileHeader;
+
+                // nextBlock is the amount of bytes the current FileHeader will
+                // store.
+                unsigned nextBlock;
+                if(remainingBytes <= MAX_FILE_SIZE)
+                    nextBlock = remainingBytes;
+                else{
+                    // Allocate as many bytes as possible.
+                    nextBlock = MAX_FILE_SIZE;
+                    remainingBytes -= MAX_FILE_SIZE;
+                }
+
+                dataHeader->Allocate(freeMap, nextBlock);
+                // Save the new FileHeader to the indirTable
+                indirTable[i] = dataHeader;
+            }
+        }
+    }
+
+    return true;
 }
