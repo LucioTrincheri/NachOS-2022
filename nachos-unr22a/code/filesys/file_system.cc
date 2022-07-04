@@ -43,7 +43,6 @@
 
 
 #include "file_system.hh"
-#include "directory.hh"
 #include "file_header.hh"
 #include "lib/bitmap.hh"
 #include "threads/lock.hh"
@@ -75,7 +74,7 @@ FileSystem::FileSystem(bool format)
     DEBUG('f', "Initializing the file system.\n");
     if (format) {
         Bitmap     *freeMap = new Bitmap(NUM_SECTORS);
-        Directory  *dir     = new Directory(NUM_DIR_ENTRIES);
+        Directory  *dir     = new Directory(NUM_DIR_ENTRIES, DIRECTORY_SECTOR); // Root has root as parent.
         FileHeader *mapH    = new FileHeader;
         FileHeader *dirH    = new FileHeader;
 
@@ -105,8 +104,8 @@ FileSystem::FileSystem(bool format)
         // The file system operations assume these two files are left open
         // while Nachos is running.
 
-        freeMapFile   = new OpenFile(FREE_MAP_SECTOR, nullptr);
-        directoryFile = new OpenFile(DIRECTORY_SECTOR, nullptr);
+        freeMapFile   = new OpenFile(FREE_MAP_SECTOR);
+        directoryFile = new OpenFile(DIRECTORY_SECTOR);
 
         // Once we have the files “open”, we can write the initial version of
         // each file back to disk.  The directory at this point is completely
@@ -131,19 +130,35 @@ FileSystem::FileSystem(bool format)
         // If we are not formatting the disk, just open the files
         // representing the bitmap and directory; these are left open while
         // Nachos is running.
-        freeMapFile   = new OpenFile(FREE_MAP_SECTOR, nullptr);
-        directoryFile = new OpenFile(DIRECTORY_SECTOR, nullptr);
+        freeMapFile   = new OpenFile(FREE_MAP_SECTOR);
+        directoryFile = new OpenFile(DIRECTORY_SECTOR);
     }
     openFileList = new OpenFileList();
     freeMapLock = new Lock("freeMapLock");
-    dirLock = new Lock("dirLock");
-
+    fileSystemLock = new Lock("fileSystemLock");
+    currentDirectory = DIRECTORY_SECTOR; // Esto es el sector al directorio actual.
+    root = DIRECTORY_SECTOR;
 }
 
 FileSystem::~FileSystem()
 {
     delete freeMapFile;
     delete directoryFile;
+    delete openFileList;
+    delete freeMapLock;
+    delete fileSystemLock;
+}
+
+
+void
+FileSystem::AcquireCurrentFileLock(Directory *dir)
+{
+    fileSystemLock->Acquire();
+    OpenFile *CDFile = new OpenFile(currentDirectory);
+    dir->FetchFrom(CDFile);
+    delete CDFile;
+    dir->directoryLock->Acquire();
+    fileSystemLock->Release();
 }
 
 /// Create a file in the Nachos file system (similar to UNIX `create`).
@@ -171,8 +186,6 @@ FileSystem::~FileSystem()
 ///
 /// * `name` is the name of file to be created.
 /// * `initialSize` is the size of file to be created.
-
-
 bool
 FileSystem::Create(const char *name, unsigned initialSize)
 {
@@ -182,8 +195,7 @@ FileSystem::Create(const char *name, unsigned initialSize)
     DEBUG('f', "Creating file %s, size %u\n", name, initialSize);
 
     Directory *dir = new Directory(NUM_DIR_ENTRIES);
-    dirLock->Acquire();
-    dir->FetchFrom(directoryFile);
+    AcquireCurrentFileLock(dir);
 
     bool success;
 
@@ -191,6 +203,7 @@ FileSystem::Create(const char *name, unsigned initialSize)
         success = false;  // File is already in directory.
     } else {
         Bitmap *freeMap = new Bitmap(NUM_SECTORS);
+        freeMapLock->Acquire();
         freeMap->FetchFrom(freeMapFile);
         int sector = freeMap->Find();
           // Find a sector to hold the file header.
@@ -212,9 +225,82 @@ FileSystem::Create(const char *name, unsigned initialSize)
                 delete h;
             }
         }
+        freeMapLock->Release();
         delete freeMap;
     }
-    dirLock->Release();
+    dir->directoryLock->Release();
+    delete dir;
+    return success;
+}
+
+/// Create a file in the Nachos file system (similar to UNIX `create`).
+/// Since we cannot increase the size of files dynamically, we have to give
+/// `Create` the initial size of the file.
+///
+/// The steps to create a file are:
+/// 1. Make sure the file does not already exist.
+/// 2. Allocate a sector for the file header.
+/// 3. Allocate space on disk for the data blocks for the file.
+/// 4. Add the name to the directory.
+/// 5. Store the new file header on disk.
+/// 6. Flush the changes to the bitmap and the directory back to disk.
+///
+/// Return true if everything goes ok, otherwise, return false.
+///
+/// Create fails if:
+/// * file is already in directory;
+/// * no free space for file header;
+/// * no free entry for file in directory;
+/// * no free space for data blocks for the file.
+///
+/// Note that this implementation assumes there is no concurrent access to
+/// the file system!
+///
+/// * `name` is the name of file to be created.
+/// * `initialSize` is the size of file to be created.
+bool
+FileSystem::CreateDir(const char *name)
+{
+    ASSERT(name != nullptr);
+
+    DEBUG('f', "Creating directory %s", name);
+
+    Directory *dir = new Directory(NUM_DIR_ENTRIES);
+    AcquireCurrentFileLock(dir);
+    //! TODO
+
+    bool success;
+    
+    if (dir->FindDir(name) != -1) {
+        success = false;  // Directory is already in directory.
+    } else {
+        Bitmap *freeMap = new Bitmap(NUM_SECTORS);
+        freeMapLock->Acquire();
+        freeMap->FetchFrom(freeMapFile);
+        int sector = freeMap->Find();
+          // Find a sector to hold the file header.
+        if (sector == -1) {
+            success = false;  // No free block for file header.
+        } else {
+            if (!dir->Add(name, sector)) {
+            success = false;  // No space in directory.
+            } else {
+                FileHeader *h = new FileHeader;
+                success = h->Allocate(freeMap, initialSize);
+                // Fails if no space on disk for data.
+                if (success) {
+                    // Everything worked, flush all changes back to disk.
+                    h->WriteBack(sector);
+                    dir->WriteBack(directoryFile);
+                    freeMap->WriteBack(freeMapFile);
+                }
+                delete h;
+            }
+        }
+        freeMapLock->Release();
+        delete freeMap;
+    }
+    dir->directoryLock->Release();
     delete dir;
     return success;
 }
@@ -236,8 +322,7 @@ FileSystem::Open(const char *name)
     OpenFile  *openFile = nullptr;
 
     DEBUG('f', "Opening file %s\n", name);
-    dirLock->Acquire();
-    dir->FetchFrom(directoryFile);
+    AcquireCurrentFileLock(dir);
     int sector = dir->Find(name);
     DEBUG('f', "Sector: %d\n", sector);
     if (sector >= 0) {
@@ -251,7 +336,7 @@ FileSystem::Open(const char *name)
         }
         openFileList->Release();
     }
-    dirLock->Release();
+    dir->directoryLock->Release();
     delete dir;
     return openFile;  // Return null if not found.
 }
@@ -274,17 +359,16 @@ FileSystem::Remove(const char *name)
     ASSERT(name != nullptr);
 
     Directory *dir = new Directory(NUM_DIR_ENTRIES);
-    dirLock->Acquire();
-    dir->FetchFrom(directoryFile);
+    AcquireCurrentFileLock(dir);
     int sector = dir->Find(name);
     if (sector == -1) {
        delete dir;
-       dirLock->Release();
+       dir->directoryLock->Release();
        return false;  // file not found
     }
     dir->Remove(name);
     dir->WriteBack(directoryFile);
-    dirLock->Release();
+    dir->directoryLock->Release();
     delete dir;
     openFileList->Acquire();
     // Si SetToBeRemoved es falso, el archivo no existe o aun no es necesario eliminarlo (pero se setea para ser eleminado en el futuro).
@@ -604,3 +688,74 @@ FileSystem::ReleaseFreeMap(Bitmap *freeMap_)
 
     freeMapLock -> Release();
 }
+
+
+// resolvedor de paths -> dir indicado
+// se le pasa el inicio
+int 
+FileSystem::PathResolver(char *path, unsigned tempDirectory)
+{
+    // cd usr/pedro
+    // pedro
+    char *ini, *rest;
+    int len = (strchr(path,'/') - path) * sizeof(char);
+    strncpy(ini, path, len);
+    strcpy(rest, path+len+1);
+    OpenFile * aux;
+    Directory *dir;
+    if (rest == rest){
+        //! buscar ini y devolver bien o mal
+    }
+    if (ini == "") {
+        return PathResolver(rest, root);
+    } else {
+        Directory *dir = new Directory(NUM_DIR_ENTRIES);
+        OpenFile *CDOpenFile = new OpenFile(tempDirectory);
+        dir->FetchFrom(CDOpenFile);
+        if (ini == "..") {
+            int parent = dir->parent;
+            delete dir;
+            delete CDOpenFile;
+            return PathResolver(rest, parent);
+        } else {
+            int sector = dir->Find(ini);
+            if (sector >= 0) {
+                delete dir;
+                delete CDOpenFile;
+                return PathResolver(rest, sector);
+            } 
+            return -1
+        }
+    }
+
+    return aux;
+
+}
+
+bool
+FileSystem::CD(const char *path)
+{
+    ASSERT(name != nullptr);
+
+    DEBUG('f', "Moving to %s", path);
+
+    // empieza con / entonces es absoluto
+    // sino es desde el dir actual (relativa).
+    // tambien name puede ser ..
+    // usr/loot/pedro
+
+    OpenFile *newDirectory = PathResolver(path); //! Mal es unsigned
+
+    if (newDirectory == nullptr) {
+        return false;
+    }
+    
+    currentDirectory = newDirectory; //! Mal es unsigned
+    return true;
+}
+
+// Se pasa el padre del directorio actual a el archivo "..". Para ello, cada vez que creamos un directorio nuevo,
+// es necesario crear este archivo en el directorio (solo si no hacer fetch). Esto lo podemos hacer en el constructor, o desde
+// afuera con el raw. 
+// Una vez hecho esto, podemos terminar PathResolver, con eso terminar CD y realizar CreateDir y RemoveDir.
+// RemoveDir solo se puede hacer si las entries estan todas seteadas en inUse = false (ver).

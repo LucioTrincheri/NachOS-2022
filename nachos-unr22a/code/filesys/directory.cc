@@ -24,6 +24,7 @@
 #include "directory_entry.hh"
 #include "file_header.hh"
 #include "lib/utility.hh"
+#include "threads/lock.hh"
 
 #include <stdio.h>
 #include <string.h>
@@ -42,11 +43,13 @@ Directory::Directory(unsigned size)
     for (unsigned i = 0; i < raw.tableSize; i++) {
         raw.table[i].inUse = false;
     }
+    directoryLock = new Lock("directoryLock");
 }
 
 /// De-allocate directory data structure.
 Directory::~Directory()
 {
+    delete directoryLock;
     delete [] raw.table;
 }
 
@@ -101,7 +104,24 @@ Directory::Find(const char *name)
     ASSERT(name != nullptr);
 
     int i = FindIndex(name);
-    if (i != -1) {
+    if (i != -1 && !raw.table[i].isDirectory) {
+        return raw.table[i].sector;
+    }
+    return -1;
+}
+
+/// Look up dictory name in directory, and return the disk sector number where
+/// the file's header is stored.  Return -1 if the name is not in the
+/// directory.
+///
+/// * `name` is the file name to look up.
+int
+Directory::FindDir(const char *name)
+{
+    ASSERT(name != nullptr);
+
+    int i = FindIndex(name);
+    if (i != -1 && raw.table[i].isDirectory) {
         return raw.table[i].sector;
     }
     return -1;
@@ -114,7 +134,7 @@ Directory::Find(const char *name)
 /// * `name` is the name of the file being added.
 /// * `newSector` is the disk sector containing the added file's header.
 bool
-Directory::Add(const char *name, int newSector)
+Directory::Add(const char *name, int newSector,  unsigned currentDirectory, bool isDirectory)
 {
     ASSERT(name != nullptr);
 
@@ -125,12 +145,13 @@ Directory::Add(const char *name, int newSector)
     for (unsigned i = 0; i < raw.tableSize; i++) {
         if (!raw.table[i].inUse) {
             raw.table[i].inUse = true;
+            raw.table[i].isDirectory = isDirectory;
             strncpy(raw.table[i].name, name, FILE_NAME_MAX_LEN);
             raw.table[i].sector = newSector;
             return true;
         }
     }
-    return false;  // no space.  Fix when we have extensible files.
+    return false;
 }
 
 /// Remove a file name from the directory.   Return true if successful;
@@ -174,7 +195,8 @@ Directory::Print() const
             printf("\nDirectory entry:\n"
                    "    name: %s\n"
                    "    sector: %u\n",
-                   raw.table[i].name, raw.table[i].sector);
+                   "    isDirectiry: %u\n",
+                   raw.table[i].name, raw.table[i].sector, raw.table[i].isDirectory);
             hdr->FetchFrom(raw.table[i].sector);
             hdr->Print(nullptr);
         }

@@ -17,7 +17,7 @@
 
 #include "raw_directory.hh"
 #include "open_file.hh"
-
+class Lock;
 
 /// The following class defines a UNIX-like “directory”.  Each entry in the
 /// directory describes a file, and where to find it on disk.
@@ -31,7 +31,7 @@
 class Directory {
 public:
 
-    /// Initialize an empty directory with space for `size` files.
+    /// Initialize an empty directory with space for `size` files, 
     Directory(unsigned size);
 
     /// De-allocate the directory.
@@ -46,8 +46,11 @@ public:
     /// Find the sector number of the `FileHeader` for file: `name`.
     int Find(const char *name);
 
+    /// Find the sector number of the `FileHeader` for directory: `name`.
+    int FindDir(const char *name);
+
     /// Add a file name into the directory.
-    bool Add(const char *name, int newSector);
+    bool Add(const char *name, int newSector, unsigned currentDirectory, bool isDirectory = false);
 
     /// Remove a file from the directory.
     bool Remove(const char *name);
@@ -65,11 +68,13 @@ public:
     /// system at a low level.
     const RawDirectory *GetRaw() const;
 
+    Lock *directoryLock;
 private:
     /// Find the index into the directory table corresponding to `name`.
     int FindIndex(const char *name);
 
     RawDirectory raw;
+
 };
 
 

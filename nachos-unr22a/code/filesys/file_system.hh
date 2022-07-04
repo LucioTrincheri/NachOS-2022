@@ -94,6 +94,7 @@ public:
 #include "machine/disk.hh"
 #include "open_file_list.hh"
 #include "lib/bitmap.hh"
+#include "directory.hh"
 
 class Lock;
 
@@ -120,6 +121,9 @@ public:
 
     /// Create a file (UNIX `creat`).
     bool Create(const char *name, unsigned initialSize = 0);
+    
+    /// Create a directory (UNIX `mkdir`).
+    bool CreateDir(const char *name);
 
     /// Open a file (UNIX `open`).
     OpenFile *Open(const char *name);
@@ -148,6 +152,12 @@ public:
 
     void ReleaseFreeMap(Bitmap *freeMap_);
 
+    void AcquireCurrentFileLock(Directory *dir);
+
+    bool CD(const char *path);
+
+    
+
 private:
     OpenFile *freeMapFile;  ///< Bit map of free disk blocks, represented as a
                             ///< file.
@@ -156,7 +166,13 @@ private:
 
     Lock *freeMapLock;
 
-    Lock *dirLock;
+    Lock *fileSystemLock;
+
+    unsigned currentDirectory;
+
+    unsigned root;
+
+    int PathResolver(char *path, unsigned tempDirectory);
 };
 
 #endif

@@ -94,7 +94,7 @@ class OpenFile {
 public:
 
     /// Open a file whose header is located at `sector` on the disk.
-    OpenFile(int sector, FileAccessController* accessController);
+    OpenFile(int sector, FileAccessController* accessController = nullptr);
 
     /// Close the file.
     ~OpenFile();

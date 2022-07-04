@@ -22,6 +22,8 @@ public:
     bool inUse;
     /// Location on disk to find the `FileHeader` for this file.
     unsigned sector;
+    /// Es directorio.
+    bool isDirectory;
     /// Text name for file, with +1 for the trailing `'\0'`.
     char name[FILE_NAME_MAX_LEN + 1];
 };
