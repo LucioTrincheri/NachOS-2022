@@ -53,7 +53,7 @@ Copy(const char *from, const char *to)
           from, fileLength, to);
 
     // Create a Nachos file of the same length.
-    if (!fileSystem->Create(to, 0)) {  // Create Nachos file. //! Cambio fileLength -> 0
+    if (!fileSystem->Create(to)) {  // Create Nachos file. //! Cambio fileLength -> fileLength/2
         printf("Copy: could not create output file %s\n", to);
         fclose(fp);
         return;

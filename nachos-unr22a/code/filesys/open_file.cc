@@ -169,7 +169,7 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
     bool firstAligned, lastAligned;
     char *buf;
 
-    if (position >= fileLength) {
+    if (position > fileLength) {
         if (fileAccessController != nullptr) {
             fileAccessController->ReleaseWrite();
         }
@@ -178,20 +178,22 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
     }
 
     // Extend the file to fit the write operation size requirement.
-    if (position + numBytes > fileLength){
+    if (position + numBytes > fileLength) {
         unsigned extendSize = position + numBytes - fileLength;
 
         // Fetch the bitmap containing the free disk sectors.
         Bitmap *freeMap;
 
         // If the file is special, exclusive access is already guaranteed.
-        if(fileAccessController == nullptr)
+        if (fileAccessController == nullptr) {
             freeMap = fileSystem->GetCurrentFreeMap();
-        else
+        }
+        else {
             freeMap = fileSystem->AcquireFreeMap();
+        }
 
-        if (!hdr->Extend(freeMap, extendSize)){
-            if(fileAccessController != nullptr){
+        if (!hdr->Extend(freeMap, extendSize)) {
+            if (fileAccessController != nullptr) {
                 fileAccessController->ReleaseWrite();
                 fileSystem->ReleaseFreeMap(freeMap);
             }
@@ -205,8 +207,9 @@ OpenFile::WriteAt(const char *from, unsigned numBytes, unsigned position)
 
         // If exclusive freeMap access was requested in this function,
         // it is revoked here.
-        if(fileAccessController != nullptr)
+        if(fileAccessController != nullptr) {
             fileSystem -> ReleaseFreeMap(freeMap);
+        }
     }
 
     DEBUG('f', "Writing %u bytes at %u, from file of length %u.\n",

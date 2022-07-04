@@ -89,7 +89,7 @@ FileHeader::Allocate(Bitmap *freeMap, unsigned fileSize)
 
             dataHeader->Allocate(freeMap, nextBlock);
             // Save the new FileHeader to the indirTable
-            indirTable[i] = dataHeader;
+            indirTable.push_back(dataHeader);
         }
     }
 
@@ -277,6 +277,7 @@ FileHeader::Extend(Bitmap *freeMap, unsigned extendSize){
             for (unsigned i = oldNumSectors; i < raw.numSectors; i++) {
                 raw.dataSectors[i] = freeMap->Find();
             }
+            remainingBytes = 0; // Entra en el header actual, queda en 0.
         // Si no entra en el FileHeader actual, hay que hacer indirección.
         } else {
             unsigned freeBytesOfLastSector = SECTOR_SIZE - (oldNumBytes % SECTOR_SIZE);
@@ -295,7 +296,8 @@ FileHeader::Extend(Bitmap *freeMap, unsigned extendSize){
             rfh->numSectors = NUM_DIRECT;
             // Actualizo los valores del FileHeader para que actue como indireccion.
             raw.dataSectors[0] = freeMap->Find();
-            indirTable[0] = fh;
+            indirTable.push_back(fh);
+            //indirTable[0] = fh;
         }
     }
 
@@ -330,7 +332,7 @@ FileHeader::Extend(Bitmap *freeMap, unsigned extendSize){
 
                 dataHeader->Allocate(freeMap, nextBlock);
                 // Save the new FileHeader to the indirTable
-                indirTable[i] = dataHeader;
+                indirTable.push_back(dataHeader);
             }
         }
     }
