@@ -102,7 +102,7 @@ class Lock;
 /// supports extensible files, the directory size sets the maximum number of
 /// files that can be loaded onto the disk.
 static const unsigned FREE_MAP_FILE_SIZE = NUM_SECTORS / BITS_IN_BYTE;
-static const unsigned NUM_DIR_ENTRIES = 10;
+static const unsigned NUM_DIR_ENTRIES = 100;
 static const unsigned DIRECTORY_FILE_SIZE
   = sizeof (DirectoryEntry) * NUM_DIR_ENTRIES;
 
@@ -133,6 +133,9 @@ public:
     /// Delete a file (UNIX `unlink`).
     bool Remove(const char *name);
 
+    /// Delete a directory
+    bool RemoveDir(const char *path);
+
     /// List all the files in the file system.
     void List();
 
@@ -152,7 +155,7 @@ public:
 
     void ReleaseFreeMap(Bitmap *freeMap_);
 
-    void AcquireCurrentFileLock(Directory *dir);
+    void AcquireCurrentDirectoryLock(Directory *dir);
 
     bool CD(const char *path);
 
@@ -173,6 +176,10 @@ private:
     unsigned root;
 
     int PathResolver(char *path, unsigned tempDirectory);
+
+    char * GetAfterLastSlash(const char *path);
+
+    char * MoveToDirectory(const char* path);
 };
 
 #endif

@@ -173,6 +173,73 @@ FileRead()
 void
 PerformanceTest()
 {
+    /*
+    printf("Creo los Directorios Valle y Messu, en ./\n");
+    ASSERT(fileSystem->CreateDir("valle"));
+    ASSERT(fileSystem->CD("valle"));
+    ASSERT(fileSystem->CreateDir("petru"));
+    ASSERT(fileSystem->CreateDir("../messu"));
+    ASSERT(fileSystem->Create("../hola.txt"));
+    ASSERT(fileSystem->Create("hola2.txt"));
+    ASSERT(fileSystem->CD(".."));
+    ASSERT(fileSystem->Create("valle/petru/holaPetru.txt"));
+    OpenFile * open = fileSystem->Open("valle/petru/holaPetru.txt");
+    ASSERT(open != nullptr);
+    fileSystem->Print();
+    ASSERT(fileSystem->Remove("valle/petru/holaPetru.txt"));
+    fileSystem->Print();
+    ASSERT(fileSystem->Close(open->GetSector()));
+    fileSystem->Print();
+    */
+
+    printf("Creo los Directorios Valle y Messu, en ./\n");
+    ASSERT(fileSystem->CreateDir("valle"));
+    ASSERT(fileSystem->CreateDir("messu"));
+
+    printf("Creo los Archivos para cada Dir, con el path ./Dir/Arc\n");
+    ASSERT(!fileSystem->Create("/Messu/bin1"));
+    ASSERT(!fileSystem->Create("/Messu/bin2"));
+    ASSERT(!fileSystem->Create("/Valle/bin1"));
+    ASSERT(!fileSystem->Create("/Valle/bin2"));
+    ASSERT(fileSystem->Create("/valle/bin2"));
+    ASSERT(!fileSystem->RemoveDir("valle"));
+
+
+    printf("Creo el Dir de Nachos\n");
+    ASSERT(fileSystem->CreateDir("nachos"));
+
+    printf("Hago CD al dir de nachos\n");
+    ASSERT(fileSystem->CD("/nachos"));
+
+    printf("Creo las Carpetas en el ./nachos/\n");
+    /// Create a lot of directories in the current directory
+    ASSERT(fileSystem->CreateDir("bin"));
+    ASSERT(fileSystem->CreateDir("filesys"));
+    ASSERT(fileSystem->CreateDir("lib"));
+    ASSERT(fileSystem->CreateDir("machine"));
+    ASSERT(fileSystem->CreateDir("network"));
+    ASSERT(fileSystem->CreateDir("threads"));
+    ASSERT(fileSystem->CreateDir("userland"));
+    ASSERT(fileSystem->CreateDir("userprog"));
+    ASSERT(fileSystem->CreateDir("vmem"));
+    ASSERT(fileSystem->Create("Makefile"));
+
+    ASSERT(fileSystem->CD("/"));
+    fileSystem->Print();
+
+    ASSERT(fileSystem->RemoveDir("/nachos/bin"));
+    ASSERT(fileSystem->CD("nachos"));
+    ASSERT(fileSystem->RemoveDir("machine"));
+    ASSERT(fileSystem->Remove("/nachos/Makefile"));
+
+    ASSERT(fileSystem->CD("/"));
+    ASSERT(fileSystem->Create("/nachos/Test"));
+    ASSERT(fileSystem->Remove("/nachos/Test"));
+    /*
+    */
+
+    
+    /*
     printf("Starting file system performance test:\n");
     stats->Print();
     FileWrite();
@@ -182,4 +249,5 @@ PerformanceTest()
         return;
     }
     stats->Print();
+    */
 }

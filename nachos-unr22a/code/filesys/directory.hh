@@ -50,7 +50,7 @@ public:
     int FindDir(const char *name);
 
     /// Add a file name into the directory.
-    bool Add(const char *name, int newSector, unsigned currentDirectory, bool isDirectory = false);
+    bool Add(const char *name, int newSector, bool isDirectory = false);
 
     /// Remove a file from the directory.
     bool Remove(const char *name);
@@ -60,7 +60,7 @@ public:
 
     /// Verbose print of the contents of the directory -- all the file names
     /// and their contents.
-    void Print() const;
+    void Print(int cantEsp = 0) const;
 
     /// Get the raw directory structure.
     ///

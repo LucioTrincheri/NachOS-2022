@@ -64,7 +64,7 @@ OpenFileList::SetToBeRemoved(int sector)
         if(entry->openInstances == 0) {
             return true;
         }
-    }
+    } 
     return false;
 }
 

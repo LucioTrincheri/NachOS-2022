@@ -20,7 +20,7 @@ class DirectoryEntry {
 public:
     /// Is this directory entry in use?
     bool inUse;
-    /// Location on disk to find the `FileHeader` for this file.
+    /// Location on disk to find the `FileHeader` for this file. En el caso del archivo .. esto refiere al sector del FileHeader del directorio padre.
     unsigned sector;
     /// Es directorio.
     bool isDirectory;

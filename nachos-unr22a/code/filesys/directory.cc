@@ -134,7 +134,7 @@ Directory::FindDir(const char *name)
 /// * `name` is the name of the file being added.
 /// * `newSector` is the disk sector containing the added file's header.
 bool
-Directory::Add(const char *name, int newSector,  unsigned currentDirectory, bool isDirectory)
+Directory::Add(const char *name, int newSector, bool isDirectory)
 {
     ASSERT(name != nullptr);
 
@@ -182,23 +182,39 @@ Directory::List() const
     }
 }
 
+void PrintSpaces(int n) {
+    for(int i = 0; i < n; i++) {
+        printf(" ");
+    }
+}
+
 /// List all the file names in the directory, their `FileHeader` locations,
 /// and the contents of each file.  For debugging.
 void
-Directory::Print() const
+Directory::Print(int cantEsp) const
 {
     FileHeader *hdr = new FileHeader;
 
-    printf("Directory contents:\n");
+    // printf("Directory contents ---------------------------------------------------------------:\n");
     for (unsigned i = 0; i < raw.tableSize; i++) {
         if (raw.table[i].inUse) {
-            printf("\nDirectory entry:\n"
-                   "    name: %s\n"
-                   "    sector: %u\n",
-                   "    isDirectiry: %u\n",
-                   raw.table[i].name, raw.table[i].sector, raw.table[i].isDirectory);
-            hdr->FetchFrom(raw.table[i].sector);
-            hdr->Print(nullptr);
+            if (raw.table[i].isDirectory) {
+                PrintSpaces(cantEsp);
+                printf("Folder: %s ----- sector: %d\n", raw.table[i].name, raw.table[i].sector);
+                Directory * dir = new Directory(10);
+                OpenFile * op = new OpenFile(raw.table[i].sector);
+                dir->FetchFrom(op);
+                if (strcmp(raw.table[i].name, "..") != 0) {
+                    dir->Print(cantEsp + 4);
+                }
+                delete dir;             
+                delete op;              
+            } else {
+                PrintSpaces(cantEsp);
+                printf("File: %s ----- sector: %u\n", raw.table[i].name, raw.table[i].sector);
+                // hdr->FetchFrom(raw.table[i].sector);
+                // hdr->Print(nullptr);
+            }
         }
     }
     printf("\n");
