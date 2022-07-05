@@ -47,6 +47,7 @@
 #include "lib/bitmap.hh"
 #include "threads/lock.hh"
 #include "file_access_controller.hh"
+#include "threads/system.hh"
 
 #include <stdio.h>
 #include <string.h>
@@ -138,7 +139,7 @@ FileSystem::FileSystem(bool format)
     openFileList = new OpenFileList();
     freeMapLock = new Lock("freeMapLock");
     fileSystemLock = new Lock("fileSystemLock");
-    currentDirectory = DIRECTORY_SECTOR; // Esto es el sector al directorio actual.
+    //caurrentDirectory = DIRECTORY_SECTOR; // Esto es el sector al directorio actual.
     root = DIRECTORY_SECTOR;
 }
 
@@ -156,7 +157,7 @@ void
 FileSystem::AcquireCurrentDirectoryLock(Directory *dir)
 {
     fileSystemLock->Acquire();
-    OpenFile *CDFile = new OpenFile(currentDirectory);
+    OpenFile *CDFile = new OpenFile(currentThread->currentDirectory);
     dir->FetchFrom(CDFile);
     delete CDFile;
     dir->directoryLock->Acquire();
@@ -193,19 +194,19 @@ FileSystem::Create(const char *path, unsigned initialSize)
 {
     ASSERT(initialSize < MAX_FILE_SIZE_W_INDIR);
 
-    int oldCurrentDirectory = currentDirectory;
+    int oldCurrentDirectory = currentThread->currentDirectory;
 
     char* name = MoveToDirectory(path);
     if (name == nullptr) {
         DEBUG('f', "Can't create file in path\n");
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return false;
     }
 
     DEBUG('f', "Creating file %s, size %u\n", name, initialSize);
 
     Directory *dir = new Directory(NUM_DIR_ENTRIES);
-    AcquireCurrentDirectoryLock(dir); //! Openfile se vuelve a usar, comprobar cuando se haga una funcion aparte. Reemplazar WriteBack de dir.
+    AcquireCurrentDirectoryLock(dir);
 
     bool success;
 
@@ -221,7 +222,7 @@ FileSystem::Create(const char *path, unsigned initialSize)
             success = false;  // No free block for file header.
         } else {
             if (!dir->Add(name, sector)) {
-            success = false;  // No space in directory.
+                success = false;  // No space in directory.
             } else {
                 FileHeader *h = new FileHeader;
                 success = h->Allocate(freeMap, initialSize);
@@ -229,7 +230,7 @@ FileSystem::Create(const char *path, unsigned initialSize)
                 if (success) {
                     // Everything worked, flush all changes back to disk.
                     h->WriteBack(sector);
-                    OpenFile *currentFile = new OpenFile(currentDirectory);
+                    OpenFile *currentFile = new OpenFile(currentThread->currentDirectory);
                     dir->WriteBack(currentFile);
                     freeMap->WriteBack(freeMapFile);
                     delete currentFile;
@@ -241,7 +242,7 @@ FileSystem::Create(const char *path, unsigned initialSize)
         delete freeMap;
     }
     dir->directoryLock->Release();
-    currentDirectory = oldCurrentDirectory;
+    currentThread->currentDirectory = oldCurrentDirectory;
     delete dir;
     return success;
 }
@@ -274,17 +275,17 @@ FileSystem::Create(const char *path, unsigned initialSize)
 bool
 FileSystem::CreateDir(const char *path)
 { 
-    int oldCurrentDirectory = currentDirectory;
+    int oldCurrentDirectory = currentThread->currentDirectory;
     char* name = MoveToDirectory(path);
 
     if (name == nullptr) {
         DEBUG('f', "Can't create directory in path\n");
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return false;
     }
     
     Directory *dir = new Directory(NUM_DIR_ENTRIES);
-    AcquireCurrentDirectoryLock(dir); //! Ver porque despues se usa el openFile otra vez.
+    AcquireCurrentDirectoryLock(dir);
     
     bool success;
     
@@ -309,11 +310,11 @@ FileSystem::CreateDir(const char *path)
                 if(success) {
                     // Everything worked, flush all changes back to disk.
                     newFirH->WriteBack(sector);
-                    OpenFile *currentFile = new OpenFile(currentDirectory); 
+                    OpenFile *currentFile = new OpenFile(currentThread->currentDirectory); 
                     dir->WriteBack(currentFile);
                     Directory *newDir = new Directory(NUM_DIR_ENTRIES);
                     OpenFile *CDFile = new OpenFile(sector);
-                    newDir->Add("..", currentDirectory, true);
+                    newDir->Add("..", currentThread->currentDirectory, true);
                     newDir->WriteBack(CDFile);
                     freeMap->WriteBack(freeMapFile);
                     delete newDir;
@@ -329,8 +330,8 @@ FileSystem::CreateDir(const char *path)
     dir->directoryLock->Release();
     delete dir;
     
-    currentDirectory = oldCurrentDirectory;
-    DEBUG('f', "Current directory after fallback %u\n", currentDirectory);
+    currentThread->currentDirectory = oldCurrentDirectory;
+    DEBUG('f', "Current directory after fallback %u\n", currentThread->currentDirectory);
     return success;
 }
 
@@ -346,12 +347,12 @@ OpenFile *
 FileSystem::Open(const char *path)
 {
 
-    int oldCurrentDirectory = currentDirectory;
+    int oldCurrentDirectory = currentThread->currentDirectory;
     char* name = MoveToDirectory(path);
     
     if (name == nullptr) {
         DEBUG('f', "Can't open file in path\n");
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return nullptr;
     }
 
@@ -375,7 +376,7 @@ FileSystem::Open(const char *path)
     }
     dir->directoryLock->Release();
     delete dir;
-    currentDirectory = oldCurrentDirectory;
+    currentThread->currentDirectory = oldCurrentDirectory;
     return openFile;  // Return null if not found.
 }
 
@@ -394,12 +395,12 @@ FileSystem::Open(const char *path)
 bool
 FileSystem::Remove(const char *path)
 {
-    int oldCurrentDirectory = currentDirectory;
+    int oldCurrentDirectory = currentThread->currentDirectory;
     char* name = MoveToDirectory(path);
     
     if (name == nullptr) {
         DEBUG('f', "Can't remove file in path\n");
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return false;
     }
 
@@ -409,12 +410,12 @@ FileSystem::Remove(const char *path)
     if (sector == -1) {
        delete dir;
        dir->directoryLock->Release();
-       currentDirectory = oldCurrentDirectory;
+       currentThread->currentDirectory = oldCurrentDirectory;
        return false;  // file not found
     }
     dir->Remove(name);
-    OpenFile * currentFile = new OpenFile(currentDirectory);
-    dir->WriteBack(currentFile); //! Este openFile ya existe al llamar AcquireCurrentDirectoryLock.
+    OpenFile * currentFile = new OpenFile(currentThread->currentDirectory);
+    dir->WriteBack(currentFile);
     dir->directoryLock->Release();
     delete currentFile;
     delete dir;
@@ -423,11 +424,11 @@ FileSystem::Remove(const char *path)
     if(openFileList->SetToBeRemoved(sector)) {
         openFileList->RemoveOpenFile(sector);
         openFileList->Release();
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return DeleteFromDisk(sector); // Esto solo sucede si el archivo no lo tiene nadie abierto durante el Remove
     }
     openFileList->Release();
-    currentDirectory = oldCurrentDirectory;
+    currentThread->currentDirectory = oldCurrentDirectory;
     return true;
 }
 
@@ -446,12 +447,12 @@ FileSystem::Remove(const char *path)
 bool
 FileSystem::RemoveDir(const char *path)
 {
-    int oldCurrentDirectory = currentDirectory;
+    int oldCurrentDirectory = currentThread->currentDirectory;
     char* name = MoveToDirectory(path);
 
     if (name == nullptr) {
         DEBUG('f', "Can't remove directory in path\n");
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return false;
     }
 
@@ -461,7 +462,7 @@ FileSystem::RemoveDir(const char *path)
     if (sector == -1) {
         dir->directoryLock->Release();
         delete dir;
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         return false;  // directory not found
     }
 
@@ -481,20 +482,20 @@ FileSystem::RemoveDir(const char *path)
         delete dirToRemove;
         dir->directoryLock->Release();
         delete dir;
-        currentDirectory = oldCurrentDirectory;
+        currentThread->currentDirectory = oldCurrentDirectory;
         DEBUG('f', "Can't remove directory in path because it has elements\n");
         return false;
     }
 
     dir->Remove(name);
-    OpenFile * currentFile = new OpenFile(currentDirectory);
-    dir->WriteBack(currentFile); //! Este openFile ya existe al llamar AcquireCurrentDirectoryLock.
+    OpenFile * currentFile = new OpenFile(currentThread->currentDirectory);
+    dir->WriteBack(currentFile);
     dir->directoryLock->Release();
     delete currentFile;
     delete dir;
     
     dirToRemove->Remove("..");
-    currentDirectory = oldCurrentDirectory;
+    currentThread->currentDirectory = oldCurrentDirectory;
     return DeleteFromDisk(sector);
 }
 
@@ -867,7 +868,7 @@ FileSystem::CD(const char *path)
     // tambien name puede ser ..
     // usr/loot/pedro
 
-    int newDirectory = PathResolver((char *) path, currentDirectory);
+    int newDirectory = PathResolver((char *) path, currentThread->currentDirectory);
 
     DEBUG('f', "Directory given by PathResolver %i\n", newDirectory);
     if (newDirectory == -1) {
@@ -875,7 +876,7 @@ FileSystem::CD(const char *path)
     }
 
     if(strcmp(GetAfterLastSlash(path), "") == 0) {
-        currentDirectory = newDirectory;
+        currentThread->currentDirectory = newDirectory;
         return true;
     }
 
@@ -884,7 +885,7 @@ FileSystem::CD(const char *path)
     dir->FetchFrom(CDOpenFile);
     newDirectory = dir->FindDir(GetAfterLastSlash(path));
     
-    currentDirectory = newDirectory;
+    currentThread->currentDirectory = newDirectory;
     delete dir;
     delete CDOpenFile;
     return true;
@@ -893,12 +894,12 @@ FileSystem::CD(const char *path)
 char *
 FileSystem::MoveToDirectory(const char* path)
 {
-    int newDirectory = PathResolver((char *)path, currentDirectory);
+    int newDirectory = PathResolver((char *)path, currentThread->currentDirectory);
     if (newDirectory == -1) {
         DEBUG('f', "Incorrect path\n");
         return nullptr;
     }
-    currentDirectory = newDirectory;
+    currentThread->currentDirectory = newDirectory;
     char* name = GetAfterLastSlash(path);
 
     if (name == nullptr || strcmp(name, "..") == 0) {
@@ -907,12 +908,3 @@ FileSystem::MoveToDirectory(const char* path)
 
     return name;
 }
-
-
-
-// Se pasa el padre del directorio actual a el archivo "..". Para ello, cada vez que creamos un directorio nuevo,
-// es necesario crear este archivo en el directorio (solo si no hacer fetch).
-
-// RemoveDir.
-// RemoveDir solo se puede hacer si las entries estan todas seteadas en inUse = false (ver).
-// Si se quiere remover, cerrar o abrir .. no se puede.

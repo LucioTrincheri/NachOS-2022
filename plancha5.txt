@@ -1,0 +1,23 @@
+Aclaraciones sobre plancha 5.
+
+Sobre el 1: para abordar el control de escritura y lectura, implementamos dos locks, uno fuerte y otro débil. El primero se encarga de que cada archivo sea editado de a un
+thread a la vez, en cambio, muchos pueden leer el mismo archivo a la vez.
+
+En el ejercicio 5, "Implementar un espacio de nombres jerárquico", construimos las siguientes funciones
+que permiten la interacción con el mismo:
+    - Create(path+name): crea un archivo en el directorio que se pasa como argumento, utilizando la nomenclatura de unix. Siempre y cuando el directorio exista y sea coherente.
+    - CreateDir(path+name): crea un directorio en el directorio que se pasa como argumento, utilizando la nomenclatura de unix. Siempre y cuando el directorio exista y sea coherente.
+    - Remove(path+name): elimina el archivo del directorio, si algún otro thread lo tiene abierto este lo puede seguir viendo. Pero cuando todos lo cierren será eliminado del disco
+    - RemoveDir(path+name): elimina un directorio siempre y cuando esté vacio.
+    - CD(path): cambia el currentDirectory del thread al especificado.
+    - Open(sector): abre un archivo.
+    - Close(name): cierra el archivo.
+    - Y modificamos Print para que muestre el contenido del directorio jerárquico.
+
+
+Para hacer el directorio jerárquico, utilizamos la estructura actual de directorio, pero las entradas no solo pueden representar archivos sino también directorios.
+A su vez, todo directorio tiene una entrada especial ("..") la cual referencia a su padre.
+Por otro lado, cada thread tiene su propio directorio actual. Por lo tanto, se puede mover por el sistema de archivos de manera independiente.
+
+Entendemos que para un uso real de las herramientas que hicimos seria útil construir llamadas al sistema que ejecuten cada una. Pero como lo que busca introducir esta plancha es el sistema de archivos y el tema de las syscall ya se trató, vimos que no era necesario. Para poder testear todo lo trabajado utilizamos el archivo fs_test.cc
+en el cual reemplazamos el test de performance por una serie de tests personalizados. Si se quiere realizar el performance test se deben intercambiar los comentarios.

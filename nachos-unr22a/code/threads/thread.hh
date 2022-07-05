@@ -151,6 +151,8 @@ public:
 
     int pid;
 
+    unsigned currentDirectory = 1;
+
 private:
     // Some of the private data for this class is listed above.
 
